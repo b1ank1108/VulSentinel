@@ -4,6 +4,8 @@ import json
 import os
 import sys
 from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
 from typing import Mapping
 from typing import Optional, Sequence, TextIO
 
@@ -11,6 +13,9 @@ from typing import Optional, Sequence, TextIO
 _ENV_BASE_URL = "OPENAI_BASE_URL"
 _ENV_API_KEY = "OPENAI_API_KEY"
 _ENV_MODEL = "OPENAI_MODEL"
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 
 @dataclass(frozen=True)
@@ -69,7 +74,15 @@ def log_progress(logger: EventLogger, *, processed: int, id: str, file_path: str
     logger.log("progress", processed=processed, id=id, file_path=file_path)
 
 
-def log_skip(logger: EventLogger, stats: RunStats, *, id: str, file_path: str, reason: str) -> None:
+def log_skip(
+    logger: EventLogger,
+    stats: RunStats,
+    *,
+    id: str,
+    file_path: str,
+    reason: str,
+    **extra: object,
+) -> None:
     stats.processed += 1
     stats.skipped += 1
     logger.log(
@@ -79,6 +92,7 @@ def log_skip(logger: EventLogger, stats: RunStats, *, id: str, file_path: str, r
         id=id,
         file_path=file_path,
         reason=reason,
+        **extra,
     )
 
 
@@ -118,7 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--from-year",
-        type=int,
+        type=_parse_from_year,
         default=None,
         help="Only process CVEs whose year (from CVE ID) >= from_year.",
     )
@@ -148,6 +162,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output directory root for generated reports (write-only).",
     )
     return parser
+
+
+def _parse_from_year(raw: str) -> int:
+    try:
+        year = int(raw)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError("from-year must be an integer") from e
+
+    if year < 0:
+        raise argparse.ArgumentTypeError("from-year must be >= 0")
+
+    max_year = date.today().year + 1
+    if year > max_year:
+        raise argparse.ArgumentTypeError(f"from-year must be <= {max_year}")
+    return year
 
 
 def _coalesce_nonempty(*values: Optional[str]) -> Optional[str]:
@@ -214,6 +243,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         reports_dir=config.reports_dir,
     )
     stats = RunStats()
+
+    from cve_poc_llm_reports.cves_jsonl import iter_cves_jsonl
+
+    templates_dir = Path(config.templates_dir)
+    for entry in iter_cves_jsonl(templates_dir=templates_dir):
+        if config.from_year is not None and entry.year < config.from_year:
+            log_skip(
+                logger,
+                stats,
+                id=entry.id,
+                file_path=entry.file_path,
+                reason="from_year",
+                from_year=config.from_year,
+                year=entry.year,
+            )
+            continue
+
     logger.log("summary", **stats.as_fields())
     return 0
 
