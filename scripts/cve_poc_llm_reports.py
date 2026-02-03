@@ -244,7 +244,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     stats = RunStats()
 
-    from cve_poc_llm_reports.cves_jsonl import iter_cves_jsonl
+    from cve_poc_llm_reports.cves_jsonl import CvesJsonlLineError, iter_cves_jsonl
     from cve_poc_llm_reports.atomic_write import atomic_write_json
     from cve_poc_llm_reports.index_jsonl import append_report_index_entry
     from cve_poc_llm_reports.report_paths import build_report_path
@@ -260,7 +260,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         timeout_seconds=30,
         max_attempts=3,
     )
-    for entry in iter_cves_jsonl(templates_dir=templates_dir):
+    def on_jsonl_error(err: CvesJsonlLineError) -> None:
+        log_failure(
+            logger,
+            stats,
+            id="(jsonl)",
+            file_path=f"{templates_dir / 'cves.json'}:{err.line_number}",
+            reason=f"jsonl_parse_failed: {err.message}; excerpt={err.raw_excerpt}",
+        )
+
+    for entry in iter_cves_jsonl(templates_dir=templates_dir, on_error=on_jsonl_error):
         if config.from_year is not None and entry.year < config.from_year:
             log_skip(
                 logger,
