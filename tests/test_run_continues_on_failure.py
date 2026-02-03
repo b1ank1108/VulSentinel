@@ -7,27 +7,15 @@ from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
 from cve_poc_llm_reports.cli import main as cli_main
-from cve_poc_llm_reports.report_schema_v1 import build_report_v1
 
 
 class TestRunContinuesOnFailure(unittest.TestCase):
-    @patch("cve_poc_llm_reports.report_generation.generate_report_v1_for_entry")
+    @patch("cve_poc_llm_reports.report_generation.generate_report_markdown_for_entry")
     def test_single_failure_does_not_abort(self, gen_mock: MagicMock) -> None:
         def side_effect(entry, *args, **kwargs):  # noqa: ANN001,ANN002,ANN003
             if entry.id == "CVE-2025-0001":
                 raise RuntimeError("boom")
-            return build_report_v1(
-                cve_id=entry.id,
-                year=entry.year,
-                template_path=f"nuclei-templates/{entry.file_path}",
-                signals={
-                    "severity": "unknown",
-                    "auth_requirement": "unknown",
-                    "oast_required": False,
-                    "version_constraints": [],
-                    "feature_gates": [],
-                },
-            )
+            return f"# {entry.id}\n\nok\n"
 
         gen_mock.side_effect = side_effect
 

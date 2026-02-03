@@ -14,12 +14,12 @@ class TestIndexJsonl(unittest.TestCase):
             append_report_index_entry(
                 index_path=index_path,
                 cve_id="CVE-2025-0001",
-                report_path="reports/http/cves/2025/CVE-2025-0001.json",
+                report_path="reports/http/cves/2025/CVE-2025-0001.md",
             )
             append_report_index_entry(
                 index_path=index_path,
                 cve_id="CVE-2025-0002",
-                report_path="reports/http/cves/2025/CVE-2025-0002.json",
+                report_path="reports/http/cves/2025/CVE-2025-0002.md",
             )
 
             lines = index_path.read_text(encoding="utf-8").splitlines()
@@ -30,4 +30,3 @@ class TestIndexJsonl(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

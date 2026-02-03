@@ -263,10 +263,10 @@ def main(
     )
     stats = RunStats()
 
-    from cve_poc_llm_reports.atomic_write import atomic_write_json
+    from cve_poc_llm_reports.atomic_write import atomic_write_text
     from cve_poc_llm_reports.cves_jsonl import CvesJsonlLineError, iter_cves_jsonl
     from cve_poc_llm_reports.index_jsonl import append_report_index_entry
-    from cve_poc_llm_reports.report_generation import ModelConfig, generate_report_v1_for_entry
+    from cve_poc_llm_reports.report_generation import ModelConfig, generate_report_markdown_for_entry
     from cve_poc_llm_reports.report_paths import build_report_path
 
     templates_dir = Path(config.templates_dir)
@@ -329,7 +329,7 @@ def main(
             continue
 
         try:
-            report = generate_report_v1_for_entry(entry, templates_dir=templates_dir, model=model)
+            report = generate_report_markdown_for_entry(entry, templates_dir=templates_dir, model=model)
         except Exception as e:  # noqa: BLE001
             log_failure(
                 logger,
@@ -341,7 +341,7 @@ def main(
             continue
 
         try:
-            atomic_write_json(report_path, report)
+            atomic_write_text(report_path, report)
         except Exception as e:  # noqa: BLE001
             log_failure(
                 logger,

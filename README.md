@@ -1,6 +1,6 @@
 # VulSentinel
 
-本仓库包含一条离线流水线：读取本仓库内的 `nuclei-templates/` CVE 模板集合，调用 OpenAI 兼容 Chat 接口生成每个 CVE 的结构化报告（JSON），并维护索引（JSONL）。
+本仓库包含一条离线流水线：读取本仓库内的 `nuclei-templates/` CVE 模板集合，调用 OpenAI 兼容 Chat 接口生成每个 CVE 的 Markdown 报告（.md），并维护索引（JSONL）。
 
 ## 运行前置
 
@@ -51,7 +51,7 @@ python3 cve_poc_llm_reports_cli.py --from-year 2025
 
 单个 CVE 报告（示例）：
 
-- `reports/<prefix>/cves/<year>/<ID>.json`
+- `reports/<prefix>/cves/<year>/<ID>.md`
 
 索引（仅对“本次成功生成的新报告”追加写）：
 

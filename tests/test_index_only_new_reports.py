@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
-from cve_poc_llm_reports.openai_json import ChatJsonResult
+from cve_poc_llm_reports.openai_text import ChatTextResult
 
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "cve_poc_llm_reports.py"
@@ -19,16 +19,10 @@ _SPEC.loader.exec_module(_SCRIPT)
 
 
 class TestIndexOnlyNewReports(unittest.TestCase):
-    @patch("cve_poc_llm_reports.report_generation.post_chat_completions_json")
+    @patch("cve_poc_llm_reports.report_generation.post_chat_completions_text")
     def test_index_only_writes_for_new_success(self, post_mock: MagicMock) -> None:
-        post_mock.return_value = ChatJsonResult(
-            data={
-                "severity": "high",
-                "auth_requirement": "none",
-                "oast_required": False,
-                "version_constraints": [],
-                "feature_gates": [],
-            },
+        post_mock.return_value = ChatTextResult(
+            content="## Signals\n- severity: high\n- auth_requirement: none\n",
             raw_response={"id": "cmpl-1"},
         )
 
@@ -54,9 +48,9 @@ class TestIndexOnlyNewReports(unittest.TestCase):
             tpl2.parent.mkdir(parents=True)
             tpl2.write_text("id: test\ninfo:\n  severity: high\n", encoding="utf-8")
 
-            existing_report = reports_dir / "http/cves/2025/CVE-2025-0001.json"
+            existing_report = reports_dir / "http/cves/2025/CVE-2025-0001.md"
             existing_report.parent.mkdir(parents=True)
-            existing_report.write_text("{}", encoding="utf-8")
+            existing_report.write_text("# existing\n", encoding="utf-8")
 
             old_env = os.environ.copy()
             try:

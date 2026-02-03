@@ -29,7 +29,7 @@ class TestReportsDirCreation(unittest.TestCase):
             )
 
             expected_dir = reports_dir / "http/cves/2025"
-            expected_file = expected_dir / "CVE-2025-0002.json"
+            expected_file = expected_dir / "CVE-2025-0002.md"
             self.assertFalse(expected_dir.exists())
 
             old_env = os.environ.copy()
@@ -59,4 +59,3 @@ class TestReportsDirCreation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

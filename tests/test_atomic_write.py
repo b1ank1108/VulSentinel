@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from cve_poc_llm_reports.atomic_write import atomic_write_json
+from cve_poc_llm_reports.atomic_write import atomic_write_json, atomic_write_text
 
 
 class TestAtomicWriteJson(unittest.TestCase):
@@ -31,6 +31,16 @@ class TestAtomicWriteJson(unittest.TestCase):
             self.assertFalse(path.exists())
 
 
+class TestAtomicWriteText(unittest.TestCase):
+    def test_atomic_write_appends_trailing_newline(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            path = root / "out.md"
+
+            atomic_write_text(path, "# hi")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "# hi\n")
+
+
 if __name__ == "__main__":
     unittest.main()
-

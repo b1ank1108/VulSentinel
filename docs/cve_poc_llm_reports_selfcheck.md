@@ -32,8 +32,8 @@ python3 cve_poc_llm_reports_cli.py \\
 期望结果（成功时）：
 
 - 生成报告：
-  - `$TMP/reports/http/cves/2021/CVE-2021-44228.json`
-  - `$TMP/reports/javascript/cves/2025/CVE-2025-49844.json`
+  - `$TMP/reports/http/cves/2021/CVE-2021-44228.md`
+  - `$TMP/reports/javascript/cves/2025/CVE-2025-49844.md`
 - 生成索引：`$TMP/reports/cves.jsonl`（至少 2 行）
 
 ## 2) 跳过（幂等：report 已存在则跳过）

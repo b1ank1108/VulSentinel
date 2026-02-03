@@ -28,9 +28,9 @@ class TestReportExistsSkip(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            existing_report = reports_dir / "http/cves/2025/CVE-2025-0002.json"
+            existing_report = reports_dir / "http/cves/2025/CVE-2025-0002.md"
             existing_report.parent.mkdir(parents=True)
-            existing_report.write_text("{}", encoding="utf-8")
+            existing_report.write_text("# existing\n", encoding="utf-8")
 
             old_env = os.environ.copy()
             try:
@@ -61,4 +61,3 @@ class TestReportExistsSkip(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

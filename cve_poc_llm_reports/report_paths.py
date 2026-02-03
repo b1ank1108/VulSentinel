@@ -7,7 +7,7 @@ def build_report_path(*, reports_dir: Path, file_path: str, year: int, cve_id: s
     prefix = _extract_prefix(file_path)
     _validate_rel_prefix(prefix)
     _validate_cve_id_for_filename(cve_id)
-    return reports_dir / prefix / "cves" / str(year) / f"{cve_id}.json"
+    return reports_dir / prefix / "cves" / str(year) / f"{cve_id}.md"
 
 
 def _extract_prefix(file_path: str) -> str:
@@ -28,4 +28,3 @@ def _validate_rel_prefix(prefix: str) -> None:
 def _validate_cve_id_for_filename(cve_id: str) -> None:
     if "/" in cve_id or "\\" in cve_id:
         raise ValueError("cve_id must not contain path separators")
-

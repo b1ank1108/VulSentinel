@@ -12,7 +12,7 @@ class TestBuildReportPath(unittest.TestCase):
             year=2019,
             cve_id="CVE-2019-10647",
         )
-        self.assertEqual(report_path.as_posix(), "reports/http/cves/2019/CVE-2019-10647.json")
+        self.assertEqual(report_path.as_posix(), "reports/http/cves/2019/CVE-2019-10647.md")
 
     def test_build_report_path_rejects_missing_prefix(self) -> None:
         with self.assertRaisesRegex(ValueError, "must contain"):
@@ -35,4 +35,3 @@ class TestBuildReportPath(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

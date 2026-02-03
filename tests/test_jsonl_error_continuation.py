@@ -1,14 +1,13 @@
 import contextlib
 import importlib.util
 import io
-import json
 import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
-from cve_poc_llm_reports.openai_json import ChatJsonResult
+from cve_poc_llm_reports.openai_text import ChatTextResult
 
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "cve_poc_llm_reports.py"
@@ -19,16 +18,10 @@ _SPEC.loader.exec_module(_SCRIPT)
 
 
 class TestJsonlErrorContinuation(unittest.TestCase):
-    @patch("cve_poc_llm_reports.report_generation.post_chat_completions_json")
+    @patch("cve_poc_llm_reports.report_generation.post_chat_completions_text")
     def test_invalid_jsonl_line_does_not_abort(self, post_mock: MagicMock) -> None:
-        post_mock.return_value = ChatJsonResult(
-            data={
-                "severity": "high",
-                "auth_requirement": "none",
-                "oast_required": False,
-                "version_constraints": [],
-                "feature_gates": [],
-            },
+        post_mock.return_value = ChatTextResult(
+            content="## Signals\n- severity: high\n- auth_requirement: none\n",
             raw_response={"id": "cmpl-1"},
         )
 
@@ -80,10 +73,9 @@ class TestJsonlErrorContinuation(unittest.TestCase):
                 os.environ.clear()
                 os.environ.update(old_env)
 
-            report_path = reports_dir / "http/cves/2025/CVE-2025-0002.json"
+            report_path = reports_dir / "http/cves/2025/CVE-2025-0002.md"
             self.assertTrue(report_path.exists())
-            data = json.loads(report_path.read_text(encoding="utf-8"))
-            self.assertEqual(data["cve"]["id"], "CVE-2025-0002")
+            self.assertIn("CVE-2025-0002", report_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
