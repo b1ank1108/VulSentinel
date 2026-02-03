@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 from urllib.error import HTTPError
 
-from cve_poc_llm_reports.openai_chat import post_chat_completions
+from cve_poc_llm_reports.openai_chat import post_chat_completions_with_retry
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,9 @@ class ChatJsonResult:
 
 
 class ChatJsonError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, causes: Sequence[BaseException]):
+        super().__init__(message)
+        self.causes = list(causes)
 
 
 def post_chat_completions_json(
@@ -26,39 +28,46 @@ def post_chat_completions_json(
     messages: Sequence[Mapping[str, Any]],
     timeout_seconds: int,
     response_format_preferred: bool = True,
+    max_attempts: int = 3,
 ) -> ChatJsonResult:
     errors: list[str] = []
+    causes: list[BaseException] = []
 
     if response_format_preferred:
         try:
-            response = post_chat_completions(
+            response = post_chat_completions_with_retry(
                 base_url=base_url,
                 api_key=api_key,
                 model=model,
                 messages=messages,
                 timeout_seconds=timeout_seconds,
                 extra_body={"response_format": {"type": "json_object"}},
+                max_attempts=max_attempts,
             )
             return _parse_chat_json_response(response)
         except HTTPError as e:
             errors.append(f"response_format rejected: HTTP {e.code}")
+            causes.append(e)
         except Exception as e:  # noqa: BLE001
             errors.append(f"response_format parse failed: {e}")
+            causes.append(e)
 
     try:
-        response = post_chat_completions(
+        response = post_chat_completions_with_retry(
             base_url=base_url,
             api_key=api_key,
             model=model,
             messages=_with_force_json_system_prompt(messages),
             timeout_seconds=timeout_seconds,
             extra_body=None,
+            max_attempts=max_attempts,
         )
         return _parse_chat_json_response(response)
     except Exception as e:  # noqa: BLE001
         errors.append(f"fallback parse failed: {e}")
+        causes.append(e)
 
-    raise ChatJsonError("; ".join(errors))
+    raise ChatJsonError("; ".join(errors), causes=causes)
 
 
 def _with_force_json_system_prompt(messages: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
@@ -94,4 +103,3 @@ def _extract_first_choice_content(response: Mapping[str, Any]) -> str:
     if not isinstance(content, str):
         raise ValueError("choices[0].message.content must be a string")
     return content.strip()
-

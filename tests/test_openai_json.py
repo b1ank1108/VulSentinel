@@ -6,7 +6,7 @@ from cve_poc_llm_reports.openai_json import ChatJsonError, post_chat_completions
 
 
 class TestOpenAIJson(unittest.TestCase):
-    @patch("cve_poc_llm_reports.openai_json.post_chat_completions")
+    @patch("cve_poc_llm_reports.openai_json.post_chat_completions_with_retry")
     def test_prefers_response_format_when_supported(self, post_mock: MagicMock) -> None:
         post_mock.return_value = {
             "choices": [{"message": {"content": "{\"ok\":true}"}}],
@@ -25,7 +25,7 @@ class TestOpenAIJson(unittest.TestCase):
         _, kwargs = post_mock.call_args
         self.assertEqual(kwargs["extra_body"], {"response_format": {"type": "json_object"}})
 
-    @patch("cve_poc_llm_reports.openai_json.post_chat_completions")
+    @patch("cve_poc_llm_reports.openai_json.post_chat_completions_with_retry")
     def test_fallback_when_response_format_rejected(self, post_mock: MagicMock) -> None:
         post_mock.side_effect = [
             HTTPError("url", 400, "bad request", {}, None),
@@ -51,13 +51,14 @@ class TestOpenAIJson(unittest.TestCase):
                 messages=[{"role": "user", "content": "hi"}],
                 timeout_seconds=3,
                 extra_body={"response_format": {"type": "json_object"}},
+                max_attempts=3,
             ),
         )
         fallback_kwargs = post_mock.call_args_list[1][1]
         self.assertIsNone(fallback_kwargs["extra_body"])
         self.assertEqual(fallback_kwargs["messages"][0]["role"], "system")
 
-    @patch("cve_poc_llm_reports.openai_json.post_chat_completions")
+    @patch("cve_poc_llm_reports.openai_json.post_chat_completions_with_retry")
     def test_raises_when_both_attempts_fail(self, post_mock: MagicMock) -> None:
         post_mock.side_effect = [
             HTTPError("url", 400, "bad request", {}, None),
