@@ -276,6 +276,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             continue
 
+        try:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            log_failure(
+                logger,
+                stats,
+                id=entry.id,
+                file_path=entry.file_path,
+                reason=f"mkdir_failed: {e}",
+            )
+            continue
+
     logger.log("summary", **stats.as_fields())
     return 0
 
