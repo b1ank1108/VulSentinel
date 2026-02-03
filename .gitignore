@@ -1,0 +1,4 @@
+.ace-tool/
+.env
+.env.*
+!.env.example
