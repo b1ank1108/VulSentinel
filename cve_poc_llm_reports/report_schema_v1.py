@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 _SCHEMA_VERSION_V1 = "v1"
-_EXPLOIT_VS_DETECT = {"exploit", "detect", "mixed", "unknown"}
 _AUTH_REQUIREMENT = {"none", "optional", "required", "unknown"}
 
 
@@ -18,6 +17,7 @@ def build_report_v1(
     normalized_signals.setdefault("severity", "unknown")
     normalized_signals.setdefault("version_constraints", [])
     normalized_signals.setdefault("feature_gates", [])
+    normalized_signals.pop("exploit_vs_detect", None)
 
     report: dict[str, Any] = {
         "schema_version": _SCHEMA_VERSION_V1,
@@ -44,9 +44,6 @@ def validate_report_v1(report: Mapping[str, Any]) -> None:
     severity = _require_str(signals, "severity", field="signals.severity")
     if severity.strip() == "":
         raise ValueError("signals.severity must be non-empty")
-
-    exploit_vs_detect = _require_str(signals, "exploit_vs_detect", field="signals.exploit_vs_detect")
-    _require_one_of("signals.exploit_vs_detect", exploit_vs_detect, _EXPLOIT_VS_DETECT)
 
     auth_requirement = _require_str(signals, "auth_requirement", field="signals.auth_requirement")
     _require_one_of("signals.auth_requirement", auth_requirement, _AUTH_REQUIREMENT)

@@ -4,7 +4,6 @@ from typing import Any, Mapping
 
 _SIGNALS_KEYS = (
     "severity",
-    "exploit_vs_detect",
     "auth_requirement",
     "oast_required",
     "version_constraints",
@@ -33,16 +32,16 @@ def build_signals_prompt_messages(
         "From the nuclei template YAML, infer result-only signals. If uncertain, use the 'unknown' enum values and empty arrays.",
         "",
         "Output:",
-        "Return ONLY a single JSON object with exactly these keys:",
+        "Return ONLY a single JSON object with at least these keys:",
         f"- {', '.join(_SIGNALS_KEYS)}",
         "",
         "Enums:",
-        "- exploit_vs_detect: exploit | detect | mixed | unknown",
         "- auth_requirement: none | optional | required | unknown",
         "",
         "Notes:",
         "- Do NOT output markdown or explanations.",
         "- Do NOT include evidence/line numbers. Only results.",
+        "- You MAY include additional descriptive fields as strings (e.g. vulnerability_description, poc_description, poc_steps).",
         "",
     ]
     if summary:

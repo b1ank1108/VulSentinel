@@ -22,7 +22,6 @@ class TestRunContinuesOnFailure(unittest.TestCase):
                 template_path=f"nuclei-templates/{entry.file_path}",
                 signals={
                     "severity": "unknown",
-                    "exploit_vs_detect": "unknown",
                     "auth_requirement": "unknown",
                     "oast_required": False,
                     "version_constraints": [],
@@ -84,4 +83,3 @@ class TestRunContinuesOnFailure(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

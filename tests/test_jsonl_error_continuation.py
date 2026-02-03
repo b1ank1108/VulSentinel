@@ -24,7 +24,6 @@ class TestJsonlErrorContinuation(unittest.TestCase):
         post_mock.return_value = ChatJsonResult(
             data={
                 "severity": "high",
-                "exploit_vs_detect": "detect",
                 "auth_requirement": "none",
                 "oast_required": False,
                 "version_constraints": [],
@@ -89,4 +88,3 @@ class TestJsonlErrorContinuation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

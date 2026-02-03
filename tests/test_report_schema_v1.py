@@ -10,7 +10,6 @@ class TestReportSchemaV1(unittest.TestCase):
             year=2025,
             template_path="nuclei-templates/http/cves/2025/CVE-2025-0001.yaml",
             signals={
-                "exploit_vs_detect": "unknown",
                 "auth_requirement": "unknown",
                 "oast_required": False,
                 "version_constraints": [],
@@ -26,7 +25,6 @@ class TestReportSchemaV1(unittest.TestCase):
             template_path="nuclei-templates/http/cves/2025/CVE-2025-0001.yaml",
             signals={
                 "severity": "high",
-                "exploit_vs_detect": "detect",
                 "auth_requirement": "none",
                 "oast_required": False,
                 "version_constraints": ["<=1.0.0"],
@@ -42,14 +40,13 @@ class TestReportSchemaV1(unittest.TestCase):
             template_path="nuclei-templates/http/cves/2025/CVE-2025-0001.yaml",
             signals={
                 "severity": "high",
-                "exploit_vs_detect": "nope",
-                "auth_requirement": "none",
+                "auth_requirement": "nope",
                 "oast_required": False,
                 "version_constraints": [],
                 "feature_gates": [],
             },
         )
-        with self.assertRaisesRegex(ValueError, "signals.exploit_vs_detect"):
+        with self.assertRaisesRegex(ValueError, "signals.auth_requirement"):
             validate_report_v1(report)
 
     def test_validate_rejects_missing_required_field(self) -> None:
@@ -57,12 +54,16 @@ class TestReportSchemaV1(unittest.TestCase):
             "schema_version": "v1",
             "cve": {"id": "CVE-2025-0001", "year": 2025},
             "template": {"path": "nuclei-templates/http/cves/2025/CVE-2025-0001.yaml"},
-            "signals": {"severity": "high"},
+            "signals": {
+                "severity": "high",
+                "oast_required": False,
+                "version_constraints": [],
+                "feature_gates": [],
+            },
         }
-        with self.assertRaisesRegex(ValueError, "signals.exploit_vs_detect"):
+        with self.assertRaisesRegex(ValueError, "signals.auth_requirement"):
             validate_report_v1(report)
 
 
 if __name__ == "__main__":
     unittest.main()
-

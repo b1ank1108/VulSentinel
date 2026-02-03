@@ -15,7 +15,6 @@ class TestReportGeneration(unittest.TestCase):
         post_mock.return_value = ChatJsonResult(
             data={
                 "severity": "high",
-                "exploit_vs_detect": "detect",
                 "auth_requirement": "none",
                 "oast_required": False,
                 "version_constraints": [],
@@ -46,8 +45,8 @@ class TestReportGeneration(unittest.TestCase):
             validate_report_v1(report)
             self.assertEqual(report["cve"]["id"], "CVE-2025-0001")
             self.assertEqual(report["template"]["path"], "nuclei-templates/http/cves/2025/CVE-2025-0001.yaml")
+            self.assertNotIn("exploit_vs_detect", report["signals"])
 
 
 if __name__ == "__main__":
     unittest.main()
-
