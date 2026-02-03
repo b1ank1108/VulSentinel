@@ -2,3 +2,22 @@
 .env
 .env.*
 !.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.python-version
+
+# generated outputs
+reports/
+
+# external checkouts
+nuclei-templates/
+
+# local tooling artifacts
+.codex/
+.omc/
+openspec/
+
+# local scratch files
+cve_poc_llm_reports/prompt_utils.py

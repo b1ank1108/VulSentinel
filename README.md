@@ -26,8 +26,8 @@ OPENAI_MODEL=...
 
 说明：
 
-- 只读 `nuclei-templates/`，不会修改其内容
-- 输出只写入 `reports/`（或你指定的 `--reports-dir`）
+- 只读 `nuclei-templates/`，不会修改其内容（建议作为外部 checkout；主仓库默认不跟踪该目录）
+- 输出只写入 `reports/`（或你指定的 `--reports-dir`；默认视为生成物，不建议提交到 git）
 
 ## 用法
 
