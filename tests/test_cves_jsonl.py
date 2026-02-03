@@ -1,8 +1,13 @@
 import unittest
+from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from cve_poc_llm_reports.cves_jsonl import CvesJsonlLineError, iter_cves_jsonl
+from cve_poc_llm_reports.cves_jsonl import (
+    CvesJsonlLineError,
+    iter_cves_jsonl,
+    parse_cve_year_from_id,
+)
 
 
 class TestIterCvesJsonl(unittest.TestCase):
@@ -65,6 +70,24 @@ class TestIterCvesJsonl(unittest.TestCase):
                 next(iter_cves_jsonl(templates_dir=templates_dir))
 
 
+class TestParseCveYearFromId(unittest.TestCase):
+    def test_parses_year(self) -> None:
+        self.assertEqual(parse_cve_year_from_id("CVE-2024-0001"), 2024)
+
+    def test_rejects_non_cve_prefix(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid CVE ID"):
+            parse_cve_year_from_id("NOPE-2024-0001")
+
+    def test_rejects_non_digit_year(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid CVE ID"):
+            parse_cve_year_from_id("CVE-20A4-0001")
+
+    def test_rejects_out_of_range_year(self) -> None:
+        with self.assertRaisesRegex(ValueError, "out of range"):
+            parse_cve_year_from_id("CVE-1998-0001")
+        with self.assertRaisesRegex(ValueError, "out of range"):
+            parse_cve_year_from_id(f"CVE-{date.today().year + 2}-0001")
+
+
 if __name__ == "__main__":
     unittest.main()
-

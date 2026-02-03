@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, Optional
 
 _MAX_LOG_EXCERPT_CHARS = 200
+_CVE_ID_RE = re.compile(r"^CVE-(\d{4})-(\d+)$", flags=re.IGNORECASE)
+_MIN_CVE_YEAR = 1999
+_MAX_CVE_YEAR = date.today().year + 1
 
 
 @dataclass(frozen=True)
@@ -33,10 +37,15 @@ def _make_excerpt(raw_line: str, *, limit: int = _MAX_LOG_EXCERPT_CHARS) -> str:
 
 
 def parse_cve_year_from_id(cve_id: str) -> int:
-    match = re.match(r"^CVE-(\d{4})-", cve_id, flags=re.IGNORECASE)
+    match = _CVE_ID_RE.match(cve_id.strip())
     if not match:
-        raise ValueError("invalid CVE ID format (expected CVE-YYYY-...)")
-    return int(match.group(1))
+        raise ValueError(f"invalid CVE ID: {cve_id!r} (expected CVE-YYYY-<number>)")
+    year = int(match.group(1))
+    if year < _MIN_CVE_YEAR or year > _MAX_CVE_YEAR:
+        raise ValueError(
+            f"invalid CVE ID: {cve_id!r} (year {year} out of range {_MIN_CVE_YEAR}-{_MAX_CVE_YEAR})"
+        )
+    return year
 
 
 def resolve_template_path(templates_dir: Path, file_path: str) -> Path:
