@@ -8,6 +8,8 @@ from datetime import date
 from pathlib import Path
 from typing import Mapping, Optional, Sequence, TextIO
 
+from dotenv import load_dotenv
+
 _ENV_BASE_URL = "OPENAI_BASE_URL"
 _ENV_API_KEY = "OPENAI_API_KEY"
 _ENV_MODEL = "OPENAI_MODEL"
@@ -211,6 +213,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     logger = EventLogger(sys.stderr)
 
+    load_dotenv(dotenv_path=_REPO_ROOT / ".env", override=False)
+
     try:
         config = resolve_config(args, os.environ)
     except ConfigError as e:
@@ -357,4 +361,3 @@ def _as_repo_relative(path: Path) -> str:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
