@@ -245,8 +245,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     stats = RunStats()
 
     from cve_poc_llm_reports.cves_jsonl import iter_cves_jsonl
+    from cve_poc_llm_reports.report_paths import build_report_path
 
     templates_dir = Path(config.templates_dir)
+    reports_dir = Path(config.reports_dir)
     for entry in iter_cves_jsonl(templates_dir=templates_dir):
         if config.from_year is not None and entry.year < config.from_year:
             log_skip(
@@ -257,6 +259,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 reason="from_year",
                 from_year=config.from_year,
                 year=entry.year,
+            )
+            continue
+
+        report_path = build_report_path(
+            reports_dir=reports_dir, file_path=entry.file_path, year=entry.year, cve_id=entry.id
+        )
+        if report_path.exists():
+            log_skip(
+                logger,
+                stats,
+                id=entry.id,
+                file_path=entry.file_path,
+                reason="report_exists",
+                report_path=str(report_path),
             )
             continue
 
