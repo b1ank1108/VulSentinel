@@ -48,7 +48,10 @@ class TestOpenAIJson(unittest.TestCase):
                 base_url="http://example.invalid",
                 api_key="k",
                 model="m",
-                messages=[{"role": "user", "content": "hi"}],
+                messages=[
+                    {"role": "system", "content": "Return a valid json object."},
+                    {"role": "user", "content": "hi"},
+                ],
                 timeout_seconds=3,
                 extra_body={"response_format": {"type": "json_object"}},
                 max_attempts=3,

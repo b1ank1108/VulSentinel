@@ -32,6 +32,7 @@ def post_chat_completions_json(
 ) -> ChatJsonResult:
     errors: list[str] = []
     causes: list[BaseException] = []
+    messages_with_json = _ensure_json_keyword(messages)
 
     if response_format_preferred:
         try:
@@ -39,7 +40,7 @@ def post_chat_completions_json(
                 base_url=base_url,
                 api_key=api_key,
                 model=model,
-                messages=messages,
+                messages=messages_with_json,
                 timeout_seconds=timeout_seconds,
                 extra_body={"response_format": {"type": "json_object"}},
                 max_attempts=max_attempts,
@@ -57,7 +58,7 @@ def post_chat_completions_json(
             base_url=base_url,
             api_key=api_key,
             model=model,
-            messages=_with_force_json_system_prompt(messages),
+            messages=_with_force_json_system_prompt(messages_with_json),
             timeout_seconds=timeout_seconds,
             extra_body=None,
             max_attempts=max_attempts,
@@ -73,9 +74,23 @@ def post_chat_completions_json(
 def _with_force_json_system_prompt(messages: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
     prefix = {
         "role": "system",
-        "content": "Return ONLY a valid JSON object. No markdown, no extra text.",
+        "content": "Return ONLY a valid json object. No markdown, no extra text.",
     }
     return [prefix, *messages]
+
+
+def _ensure_json_keyword(messages: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, str) and "json" in content.lower():
+            return list(messages)
+    return [
+        {
+            "role": "system",
+            "content": "Return a valid json object.",
+        },
+        *messages,
+    ]
 
 
 def _parse_chat_json_response(response: Mapping[str, Any]) -> ChatJsonResult:
