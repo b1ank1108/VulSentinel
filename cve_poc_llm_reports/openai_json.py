@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
-from urllib.error import HTTPError
+from openai import APIStatusError
 
 from cve_poc_llm_reports.openai_chat import post_chat_completions_with_retry
 
@@ -34,6 +34,7 @@ def post_chat_completions_json(
     causes: list[BaseException] = []
     messages_with_json = _ensure_json_keyword(messages)
 
+    should_fallback = not response_format_preferred
     if response_format_preferred:
         try:
             response = post_chat_completions_with_retry(
@@ -46,27 +47,30 @@ def post_chat_completions_json(
                 max_attempts=max_attempts,
             )
             return _parse_chat_json_response(response)
-        except HTTPError as e:
-            errors.append(f"response_format rejected: HTTP {e.code}")
-            causes.append(e)
         except Exception as e:  # noqa: BLE001
-            errors.append(f"response_format parse failed: {e}")
             causes.append(e)
+            if _is_response_format_rejected_400(e):
+                errors.append("response_format rejected: HTTP 400")
+                should_fallback = True
+            else:
+                errors.append(f"response_format failed: {e}")
+                raise ChatJsonError("; ".join(errors), causes=causes) from e
 
-    try:
-        response = post_chat_completions_with_retry(
-            base_url=base_url,
-            api_key=api_key,
-            model=model,
-            messages=_with_force_json_system_prompt(messages_with_json),
-            timeout_seconds=timeout_seconds,
-            extra_body=None,
-            max_attempts=max_attempts,
-        )
-        return _parse_chat_json_response(response)
-    except Exception as e:  # noqa: BLE001
-        errors.append(f"fallback parse failed: {e}")
-        causes.append(e)
+    if should_fallback:
+        try:
+            response = post_chat_completions_with_retry(
+                base_url=base_url,
+                api_key=api_key,
+                model=model,
+                messages=_with_force_json_system_prompt(messages_with_json),
+                timeout_seconds=timeout_seconds,
+                extra_body=None,
+                max_attempts=max_attempts,
+            )
+            return _parse_chat_json_response(response)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"fallback parse failed: {e}")
+            causes.append(e)
 
     raise ChatJsonError("; ".join(errors), causes=causes)
 
@@ -91,6 +95,19 @@ def _ensure_json_keyword(messages: Sequence[Mapping[str, Any]]) -> list[Mapping[
         },
         *messages,
     ]
+
+
+def _is_response_format_rejected_400(error: BaseException) -> bool:
+    if not isinstance(error, APIStatusError) or error.status_code != 400:
+        return False
+
+    message = ""
+    if getattr(error, "message", None):
+        message += str(error.message)
+    if getattr(error, "body", None) is not None:
+        message += " " + str(error.body)
+    low = message.lower()
+    return ("response_format" in low) or ("response format" in low)
 
 
 def _parse_chat_json_response(response: Mapping[str, Any]) -> ChatJsonResult:

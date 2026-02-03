@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Optional, Sequence
 from urllib.error import HTTPError, URLError
 
-from openai import OpenAI
+from openai import APIStatusError, OpenAI
 
 _DEFAULT_TIMEOUT_SECONDS = 30
 _MAX_ERROR_EXCERPT_CHARS = 200
@@ -79,6 +79,22 @@ def post_chat_completions_with_retry(
                 timeout_seconds=timeout_seconds,
                 extra_body=extra_body,
             )
+        except APIStatusError as e:
+            if e.status_code not in _RETRYABLE_HTTP_STATUS:
+                raise
+            excerpt = None
+            if e.body is not None:
+                excerpt = str(e.body)[:_MAX_ERROR_EXCERPT_CHARS]
+            attempts.append(
+                ChatRequestAttemptError(
+                    attempt=attempt,
+                    error_type="api_status",
+                    status_code=e.status_code,
+                    message=f"HTTP {e.status_code}",
+                    response_excerpt=excerpt,
+                )
+            )
+            last_exc = e
         except HTTPError as e:
             if e.code not in _RETRYABLE_HTTP_STATUS:
                 raise
