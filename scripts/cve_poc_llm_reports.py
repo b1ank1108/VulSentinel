@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import os
 import sys
 from dataclasses import dataclass
 from typing import Mapping
-from typing import Optional, Sequence
+from typing import Optional, Sequence, TextIO
 
 
 _ENV_BASE_URL = "OPENAI_BASE_URL"
@@ -24,6 +25,89 @@ class AppConfig:
 
 class ConfigError(ValueError):
     pass
+
+
+def _fmt_kv(**fields: object) -> str:
+    parts = []
+    for k in sorted(fields):
+        v = fields[k]
+        if v is None:
+            continue
+        parts.append(f"{k}={json.dumps(v, ensure_ascii=False, separators=(',', ':'))}")
+    return " ".join(parts)
+
+
+class EventLogger:
+    def __init__(self, out: TextIO) -> None:
+        self._out = out
+
+    def log(self, event: str, **fields: object) -> None:
+        msg = f"event={event}"
+        kv = _fmt_kv(**fields)
+        if kv:
+            msg = f"{msg} {kv}"
+        print(msg, file=self._out, flush=True)
+
+
+@dataclass
+class RunStats:
+    processed: int = 0
+    skipped: int = 0
+    failed: int = 0
+    succeeded: int = 0
+
+    def as_fields(self) -> Mapping[str, int]:
+        return {
+            "processed": self.processed,
+            "skipped": self.skipped,
+            "failed": self.failed,
+            "succeeded": self.succeeded,
+        }
+
+
+def log_progress(logger: EventLogger, *, processed: int, id: str, file_path: str) -> None:
+    logger.log("progress", processed=processed, id=id, file_path=file_path)
+
+
+def log_skip(logger: EventLogger, stats: RunStats, *, id: str, file_path: str, reason: str) -> None:
+    stats.processed += 1
+    stats.skipped += 1
+    logger.log(
+        "skip",
+        processed=stats.processed,
+        skipped=stats.skipped,
+        id=id,
+        file_path=file_path,
+        reason=reason,
+    )
+
+
+def log_failure(logger: EventLogger, stats: RunStats, *, id: str, file_path: str, reason: str) -> None:
+    stats.processed += 1
+    stats.failed += 1
+    logger.log(
+        "fail",
+        processed=stats.processed,
+        failed=stats.failed,
+        id=id,
+        file_path=file_path,
+        reason=reason,
+    )
+
+
+def log_success(
+    logger: EventLogger, stats: RunStats, *, id: str, file_path: str, report_path: str
+) -> None:
+    stats.processed += 1
+    stats.succeeded += 1
+    logger.log(
+        "success",
+        processed=stats.processed,
+        succeeded=stats.succeeded,
+        id=id,
+        file_path=file_path,
+        report_path=report_path,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -115,11 +199,22 @@ def resolve_config(args: argparse.Namespace, env: Mapping[str, str]) -> AppConfi
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    logger = EventLogger(sys.stderr)
     try:
-        _config = resolve_config(args, os.environ)
+        config = resolve_config(args, os.environ)
     except ConfigError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    logger.log(
+        "start",
+        from_year=config.from_year,
+        base_url=config.base_url,
+        model=config.model,
+        templates_dir=config.templates_dir,
+        reports_dir=config.reports_dir,
+    )
+    stats = RunStats()
+    logger.log("summary", **stats.as_fields())
     return 0
 
 
