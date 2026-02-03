@@ -56,8 +56,10 @@ def resolve_template_path(templates_dir: Path, file_path: str) -> Path:
 
     candidate = (templates_dir / file_path).resolve(strict=False)
     root = templates_dir.resolve(strict=False)
-    if not candidate.is_relative_to(root):
-        raise ValueError("file_path escapes templates_dir")
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("file_path escapes templates_dir") from exc
     return candidate
 
 
