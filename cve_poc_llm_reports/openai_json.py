@@ -7,6 +7,8 @@ from openai import APIStatusError
 
 from cve_poc_llm_reports.openai_chat import post_chat_completions_with_retry
 
+_MAX_INVALID_JSON_EXCERPT_CHARS = 800
+
 
 @dataclass(frozen=True)
 class ChatJsonResult:
@@ -115,7 +117,27 @@ def _parse_chat_json_response(response: Mapping[str, Any]) -> ChatJsonResult:
     try:
         data = json.loads(content)
     except json.JSONDecodeError as e:
-        raise ValueError(f"assistant content is not valid JSON: {e}") from e
+        response_id = response.get("id")
+        model = response.get("model")
+        finish_reason = _extract_first_choice_finish_reason(response)
+        excerpt = _make_excerpt(content)
+        stripped_len = len(content.strip())
+
+        meta: list[str] = []
+        if isinstance(response_id, str) and response_id.strip():
+            meta.append(f"response_id={response_id}")
+        if isinstance(model, str) and model.strip():
+            meta.append(f"model={model}")
+        if isinstance(finish_reason, str) and finish_reason.strip():
+            meta.append(f"finish_reason={finish_reason}")
+        meta_prefix = "; ".join(meta)
+        if meta_prefix:
+            meta_prefix += "; "
+
+        raise ValueError(
+            "assistant content is not valid JSON: "
+            f"{e}; {meta_prefix}content_len={len(content)}; stripped_len={stripped_len}; content_excerpt={excerpt}"
+        ) from e
     return ChatJsonResult(data=data, raw_response=response)
 
 
@@ -134,4 +156,31 @@ def _extract_first_choice_content(response: Mapping[str, Any]) -> str:
         raise ValueError("missing choices[0].message.content in chat response")
     if not isinstance(content, str):
         raise ValueError("choices[0].message.content must be a string")
-    return content.strip()
+    return content
+
+
+def _extract_first_choice_finish_reason(response: Mapping[str, Any]) -> Optional[str]:
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+    choice0 = choices[0]
+    if not isinstance(choice0, Mapping):
+        return None
+    finish_reason = choice0.get("finish_reason")
+    if not isinstance(finish_reason, str):
+        return None
+    return finish_reason
+
+
+def _make_excerpt(content: str, *, limit: int = _MAX_INVALID_JSON_EXCERPT_CHARS) -> str:
+    if content.strip() == "":
+        return "<EMPTY>"
+    if limit <= 0:
+        return ""
+    if len(content) <= limit:
+        return content
+    head = int(limit * 0.7)
+    tail = limit - head
+    if tail <= 0:
+        return content[:limit] + "\n...(truncated)...\n"
+    return content[:head] + "\n...(truncated)...\n" + content[-tail:]

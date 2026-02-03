@@ -93,7 +93,7 @@ class TestOpenAIJson(unittest.TestCase):
         ]
         openai_client_cls.return_value = client
 
-        with self.assertRaises(ChatJsonError):
+        with self.assertRaises(ChatJsonError) as ctx:
             post_chat_completions_json(
                 base_url="http://example.invalid/v1",
                 api_key="k",
@@ -101,6 +101,8 @@ class TestOpenAIJson(unittest.TestCase):
                 messages=[{"role": "user", "content": "hi"}],
                 timeout_seconds=3,
             )
+        self.assertIn("content_excerpt", str(ctx.exception))
+        self.assertIn("not-json", str(ctx.exception))
 
         self.assertEqual(openai_client_cls.call_count, 2)
         self.assertEqual(client.chat.completions.create.call_count, 2)
@@ -131,4 +133,3 @@ class TestOpenAIJson(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
