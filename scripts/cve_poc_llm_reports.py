@@ -246,11 +246,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     from cve_poc_llm_reports.cves_jsonl import iter_cves_jsonl
     from cve_poc_llm_reports.atomic_write import atomic_write_json
+    from cve_poc_llm_reports.index_jsonl import append_report_index_entry
     from cve_poc_llm_reports.report_paths import build_report_path
     from cve_poc_llm_reports.report_generation import ModelConfig, generate_report_v1_for_entry
 
     templates_dir = Path(config.templates_dir)
     reports_dir = Path(config.reports_dir)
+    index_path = reports_dir / "cves.jsonl"
     model = ModelConfig(
         base_url=config.base_url,
         api_key=config.api_key,
@@ -321,6 +323,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             continue
 
+        try:
+            append_report_index_entry(
+                index_path=index_path,
+                cve_id=entry.id,
+                report_path=_as_repo_relative(report_path),
+            )
+        except Exception as e:  # noqa: BLE001
+            try:
+                report_path.unlink()
+            except OSError:
+                pass
+            log_failure(
+                logger,
+                stats,
+                id=entry.id,
+                file_path=entry.file_path,
+                reason=f"index_write_failed: {e}",
+            )
+            continue
+
         log_success(
             logger,
             stats,
@@ -331,6 +353,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     logger.log("summary", **stats.as_fields())
     return 0
+
+
+def _as_repo_relative(path: Path) -> str:
+    try:
+        return path.resolve(strict=False).relative_to(_REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 if __name__ == "__main__":
