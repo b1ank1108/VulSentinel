@@ -30,7 +30,7 @@ class ChatRequestError(RuntimeError):
 
 
 def build_chat_completions_url(base_url: str) -> str:
-    return base_url.rstrip("/") + "/v1/chat/completions"
+    return base_url.rstrip("/") + "/chat/completions"
 
 
 def post_chat_completions(

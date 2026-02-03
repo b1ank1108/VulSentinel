@@ -8,11 +8,11 @@ from cve_poc_llm_reports.openai_chat import build_chat_completions_url, post_cha
 class TestOpenAIChat(unittest.TestCase):
     def test_build_chat_completions_url_normalizes_slash(self) -> None:
         self.assertEqual(
-            build_chat_completions_url("http://example.invalid/"),
+            build_chat_completions_url("http://example.invalid/v1/"),
             "http://example.invalid/v1/chat/completions",
         )
         self.assertEqual(
-            build_chat_completions_url("http://example.invalid"),
+            build_chat_completions_url("http://example.invalid/v1"),
             "http://example.invalid/v1/chat/completions",
         )
 
@@ -24,7 +24,7 @@ class TestOpenAIChat(unittest.TestCase):
         urlopen_mock.return_value = response
 
         out = post_chat_completions(
-            base_url="http://example.invalid/",
+            base_url="http://example.invalid/v1/",
             api_key="secret",
             model="gpt-test",
             messages=[{"role": "user", "content": "hello"}],
@@ -47,4 +47,3 @@ class TestOpenAIChat(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

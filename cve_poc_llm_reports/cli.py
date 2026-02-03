@@ -189,7 +189,7 @@ def _coalesce_nonempty(*values: Optional[str]) -> Optional[str]:
 
 
 def _normalize_base_url(base_url: str) -> str:
-    return base_url.rstrip("/")
+    return base_url.strip()
 
 
 def resolve_config(args: argparse.Namespace, env: Mapping[str, str]) -> AppConfig:
@@ -389,4 +389,3 @@ def _as_repo_relative(repo_root: Path, path: Path) -> str:
         return path.resolve(strict=False).relative_to(repo_root).as_posix()
     except ValueError:
         return path.as_posix()
-
