@@ -116,7 +116,15 @@ def _parse_chat_json_response(response: Mapping[str, Any]) -> ChatJsonResult:
     content = _extract_first_choice_content(response)
     try:
         data = json.loads(content)
+        return ChatJsonResult(data=data, raw_response=response)
     except json.JSONDecodeError as e:
+        unfenced = _strip_code_fence(content)
+        if unfenced is not None:
+            try:
+                data = json.loads(unfenced)
+                return ChatJsonResult(data=data, raw_response=response)
+            except json.JSONDecodeError:
+                pass
         response_id = response.get("id")
         model = response.get("model")
         finish_reason = _extract_first_choice_finish_reason(response)
@@ -138,7 +146,7 @@ def _parse_chat_json_response(response: Mapping[str, Any]) -> ChatJsonResult:
             "assistant content is not valid JSON: "
             f"{e}; {meta_prefix}content_len={len(content)}; stripped_len={stripped_len}; content_excerpt={excerpt}"
         ) from e
-    return ChatJsonResult(data=data, raw_response=response)
+    raise AssertionError("unreachable")
 
 
 def _extract_first_choice_content(response: Mapping[str, Any]) -> str:
@@ -184,3 +192,17 @@ def _make_excerpt(content: str, *, limit: int = _MAX_INVALID_JSON_EXCERPT_CHARS)
     if tail <= 0:
         return content[:limit] + "\n...(truncated)...\n"
     return content[:head] + "\n...(truncated)...\n" + content[-tail:]
+
+
+def _strip_code_fence(content: str) -> Optional[str]:
+    stripped = content.strip()
+    if not stripped.startswith("```"):
+        return None
+    lines = stripped.splitlines()
+    if len(lines) < 2:
+        return None
+    if not lines[0].strip().startswith("```"):
+        return None
+    if not lines[-1].strip().startswith("```"):
+        return None
+    return "\n".join(lines[1:-1]).strip()

@@ -43,6 +43,24 @@ class TestOpenAIJson(unittest.TestCase):
         self.assertTrue(any("json" in str(m.get("content", "")).lower() for m in kwargs["messages"]))
 
     @patch("cve_poc_llm_reports.openai_chat.OpenAI")
+    def test_accepts_fenced_json_content(self, openai_client_cls: MagicMock) -> None:
+        completion = MagicMock()
+        completion.model_dump.return_value = {"choices": [{"message": {"content": '```json\n{"ok":true}\n```'}}]}
+
+        client = MagicMock()
+        client.chat.completions.create.return_value = completion
+        openai_client_cls.return_value = client
+
+        result = post_chat_completions_json(
+            base_url="http://example.invalid/v1",
+            api_key="k",
+            model="m",
+            messages=[{"role": "user", "content": "hi"}],
+            timeout_seconds=3,
+        )
+        self.assertEqual(result.data, {"ok": True})
+
+    @patch("cve_poc_llm_reports.openai_chat.OpenAI")
     def test_fallback_when_response_format_rejected(self, openai_client_cls: MagicMock) -> None:
         completion = MagicMock()
         completion.model_dump.return_value = {"choices": [{"message": {"content": "{\"ok\":true}"}}]}
