@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 import random
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Optional, Sequence
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+from openai import OpenAI
 
 _DEFAULT_TIMEOUT_SECONDS = 30
 _MAX_ERROR_EXCERPT_CHARS = 200
@@ -42,24 +42,13 @@ def post_chat_completions(
     timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
     extra_body: Optional[Mapping[str, Any]] = None,
 ) -> Mapping[str, Any]:
-    url = build_chat_completions_url(base_url)
-    body: dict[str, Any] = {"model": model, "messages": list(messages)}
-    if extra_body:
-        body.update(extra_body)
-
-    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    request = Request(
-        url=url,
-        method="POST",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
+    client = OpenAI(api_key=api_key, base_url=base_url, timeout=float(timeout_seconds))
+    completion = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        extra_body=dict(extra_body) if extra_body else None,
     )
-    with urlopen(request, timeout=timeout_seconds) as response:
-        raw = response.read()
-    return json.loads(raw)
+    return completion.model_dump()
 
 
 def post_chat_completions_with_retry(

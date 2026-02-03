@@ -1,4 +1,3 @@
-import json
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -16,33 +15,37 @@ class TestOpenAIChat(unittest.TestCase):
             "http://example.invalid/v1/chat/completions",
         )
 
-    @patch("cve_poc_llm_reports.openai_chat.urlopen")
-    def test_post_chat_completions_builds_request(self, urlopen_mock: MagicMock) -> None:
-        response = MagicMock()
-        response.__enter__.return_value = response
-        response.read.return_value = b'{"id":"cmpl-1","choices":[{"message":{"content":"ok"}}]}'
-        urlopen_mock.return_value = response
+    @patch("cve_poc_llm_reports.openai_chat.OpenAI")
+    def test_post_chat_completions_calls_sdk(self, openai_client_cls: MagicMock) -> None:
+        completion = MagicMock()
+        completion.model_dump.return_value = {
+            "id": "cmpl-1",
+            "choices": [{"message": {"content": "ok"}}],
+        }
+        client = MagicMock()
+        client.chat.completions.create.return_value = completion
+        openai_client_cls.return_value = client
 
+        messages = [{"role": "user", "content": "hello"}]
         out = post_chat_completions(
             base_url="http://example.invalid/v1/",
             api_key="secret",
             model="gpt-test",
-            messages=[{"role": "user", "content": "hello"}],
+            messages=messages,
             timeout_seconds=5,
         )
         self.assertEqual(out["id"], "cmpl-1")
 
-        (req,), kwargs = urlopen_mock.call_args
-        self.assertEqual(req.full_url, "http://example.invalid/v1/chat/completions")
-        self.assertEqual(kwargs, {"timeout": 5})
-
-        headers = dict(req.header_items())
-        self.assertEqual(headers["Content-type"], "application/json")
-        self.assertEqual(headers["Authorization"], "Bearer secret")
-
-        body = json.loads(req.data.decode("utf-8"))
-        self.assertEqual(body["model"], "gpt-test")
-        self.assertEqual(body["messages"][0]["content"], "hello")
+        openai_client_cls.assert_called_once_with(
+            api_key="secret",
+            base_url="http://example.invalid/v1/",
+            timeout=5.0,
+        )
+        client.chat.completions.create.assert_called_once_with(
+            model="gpt-test",
+            messages=messages,
+            extra_body=None,
+        )
 
 
 if __name__ == "__main__":
