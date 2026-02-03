@@ -245,10 +245,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     stats = RunStats()
 
     from cve_poc_llm_reports.cves_jsonl import iter_cves_jsonl
+    from cve_poc_llm_reports.atomic_write import atomic_write_json
     from cve_poc_llm_reports.report_paths import build_report_path
+    from cve_poc_llm_reports.report_generation import ModelConfig, generate_report_v1_for_entry
 
     templates_dir = Path(config.templates_dir)
     reports_dir = Path(config.reports_dir)
+    model = ModelConfig(
+        base_url=config.base_url,
+        api_key=config.api_key,
+        model=config.model,
+        timeout_seconds=30,
+        max_attempts=3,
+    )
     for entry in iter_cves_jsonl(templates_dir=templates_dir):
         if config.from_year is not None and entry.year < config.from_year:
             log_skip(
@@ -287,6 +296,38 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 reason=f"mkdir_failed: {e}",
             )
             continue
+
+        try:
+            report = generate_report_v1_for_entry(entry, templates_dir=templates_dir, model=model)
+        except Exception as e:  # noqa: BLE001
+            log_failure(
+                logger,
+                stats,
+                id=entry.id,
+                file_path=entry.file_path,
+                reason=f"report_generation_failed: {e}",
+            )
+            continue
+
+        try:
+            atomic_write_json(report_path, report)
+        except Exception as e:  # noqa: BLE001
+            log_failure(
+                logger,
+                stats,
+                id=entry.id,
+                file_path=entry.file_path,
+                reason=f"report_write_failed: {e}",
+            )
+            continue
+
+        log_success(
+            logger,
+            stats,
+            id=entry.id,
+            file_path=entry.file_path,
+            report_path=str(report_path),
+        )
 
     logger.log("summary", **stats.as_fields())
     return 0
