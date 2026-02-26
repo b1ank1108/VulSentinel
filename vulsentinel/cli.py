@@ -269,7 +269,6 @@ def main(
     logger.log(
         "start",
         from_year=config.from_year,
-        base_url=config.base_url,
         model=config.model,
         templates_dir=config.templates_dir,
         reports_dir=config.reports_dir,

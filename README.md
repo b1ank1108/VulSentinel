@@ -53,11 +53,3 @@ poc_classification: info-leak
 | `affected_versions` | 受影响版本范围 |
 | `preconditions` | 利用前置条件 |
 | `poc_classification` | info-leak / auth-bypass / rce / state-change / dos / detect-only |
-
-## CI/CD
-
-GitHub Actions（`.github/workflows/daily-reports.yml`）：
-- push / PR → 自动测试
-- 每天 02:00 UTC → 拉取 nuclei-templates，生成报告，自动提交
-
-Secrets：`OPENAI_BASE_URL`、`OPENAI_API_KEY`、`OPENAI_MODEL`
