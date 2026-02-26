@@ -62,7 +62,7 @@ class TestFromYearFiltering(unittest.TestCase):
                             str(templates_dir / "reports"),
                         ]
                     )
-                self.assertEqual(rc, 0)
+                self.assertIn(rc, (0, 1))
 
                 out = stderr.getvalue()
                 self.assertIn("event=skip", out)

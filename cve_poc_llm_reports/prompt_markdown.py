@@ -37,15 +37,41 @@ def build_report_markdown_prompt_messages(
         "- Do NOT include a top-level title (the caller will add '# <CVE-ID>').",
         "",
         "Required sections:",
+        "",
+        "FORMATTING RULE: Use standard Markdown `##` headings for ALL section titles. Do NOT use bold (`**`) for section headings.",
+        "",
         "## Signals",
         f"- Include exactly these keys: {', '.join(_REQUIRED_SIGNAL_KEYS)}",
-        "## Vulnerability",
-        "## PoC / Detection",
-        "## References",
+        "- Format each signal as a plain '- key: value' line (no bold, no extra formatting).",
+        "- severity: copy from info.severity",
+        "- auth_requirement: whether the TEMPLATE ITSELF sends auth credentials (Authorization header, cookies, login step). "
+        "Values: none / required / optional. This reflects the template's behavior, NOT the real-world vulnerability's auth requirement.",
+        "- oast_required: true ONLY if the template uses {{interactsh-url}}, oob, or DNS/HTTP callback mechanisms. "
+        "If no such mechanism is present, set to false. Never use 'unknown' for this field.",
+        "- version_constraints: ONLY report ranges that the template ENFORCES via compare_versions() or equivalent DSL in its matchers. "
+        "If the template has no version-checking logic in matchers, write 'unknown' even if info.description mentions version ranges.",
+        "- feature_gates: conditions beyond version that must be true for exploitation. "
+        "Examples: specific features enabled ('Git node enabled'), configurations ('guest ticket creation allowed'), deployment modes ('self-hosted'). "
+        "Extract from info.description and template request patterns. Use [] only if truly no preconditions.",
         "",
-        "Notes:",
-        "- Focus on what the template actually does (detect-only vs exploit).",
-        "- Do NOT include the full YAML in the output.",
+        "## Vulnerability",
+        "",
+        "## PoC / Detection",
+        "Classify the template into exactly ONE of these categories based on what it ACTUALLY DOES (not what the vulnerability could do):",
+        "- detect-only: template only fingerprints/version-checks, sends no payload, creates no server-side state.",
+        "- active-detect: template sends a probe that triggers the vuln condition but does not exfiltrate data or create persistent state (e.g. reflected XSS check).",
+        "- exploit: template actively exploits the vuln: reads unauthorized data (SSRF/LFI), creates sessions (auth bypass), modifies state (password reset), or executes code.",
+        "- intrusive: template has destructive side effects (password changes, data writes, account creation). Check for 'intrusive' in tags.",
+        "Use the tags field as strong hints: 'passive' -> likely detect-only, 'intrusive' -> intrusive, 'auth-bypass' -> likely exploit or intrusive.",
+        "State the classification clearly at the start of this section: 'Classification: <category>'.",
+        "",
+        "## References",
+        "Include ONLY URLs listed in the template's info.reference field. Do NOT add, infer, or fabricate any other URLs.",
+        "",
+        "Consistency check: before finalizing, verify that if the PoC section describes state modification, auth bypass, data exfiltration, "
+        "or destructive actions, the Vulnerability section does NOT call the template 'detect-only'.",
+        "",
+        "Do NOT include the full YAML in the output.",
         "",
     ]
     if summary:

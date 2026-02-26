@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from cve_poc_llm_reports.openai_chat import post_chat_completions_with_retry
 
@@ -20,6 +20,7 @@ def post_chat_completions_text(
     messages: Sequence[Mapping[str, Any]],
     timeout_seconds: int,
     max_attempts: int = 3,
+    client: Optional[object] = None,
 ) -> ChatTextResult:
     response = post_chat_completions_with_retry(
         base_url=base_url,
@@ -29,6 +30,7 @@ def post_chat_completions_text(
         timeout_seconds=timeout_seconds,
         extra_body=None,
         max_attempts=max_attempts,
+        client=client,
     )
     return _parse_chat_text_response(response)
 

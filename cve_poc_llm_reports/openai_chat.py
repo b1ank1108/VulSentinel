@@ -41,8 +41,10 @@ def post_chat_completions(
     messages: Sequence[Mapping[str, Any]],
     timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
     extra_body: Optional[Mapping[str, Any]] = None,
+    client: Optional[OpenAI] = None,
 ) -> Mapping[str, Any]:
-    client = OpenAI(api_key=api_key, base_url=base_url, timeout=float(timeout_seconds))
+    if client is None:
+        client = OpenAI(api_key=api_key, base_url=base_url, timeout=float(timeout_seconds))
     completion = client.chat.completions.create(
         model=model,
         messages=messages,
@@ -64,6 +66,7 @@ def post_chat_completions_with_retry(
     max_backoff_seconds: float = 4.0,
     jitter_seconds: float = 0.1,
     sleep: Callable[[float], None] = time.sleep,
+    client: Optional[OpenAI] = None,
 ) -> Mapping[str, Any]:
     if max_attempts < 1:
         raise ValueError("max_attempts must be >= 1")
@@ -78,6 +81,7 @@ def post_chat_completions_with_retry(
                 messages=messages,
                 timeout_seconds=timeout_seconds,
                 extra_body=extra_body,
+                client=client,
             )
         except APIStatusError as e:
             if e.status_code not in _RETRYABLE_HTTP_STATUS:

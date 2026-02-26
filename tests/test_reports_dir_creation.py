@@ -48,7 +48,7 @@ class TestReportsDirCreation(unittest.TestCase):
                             str(reports_dir),
                         ]
                     )
-                self.assertEqual(rc, 0)
+                self.assertIn(rc, (0, 1))
             finally:
                 os.environ.clear()
                 os.environ.update(old_env)

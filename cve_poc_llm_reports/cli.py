@@ -14,8 +14,11 @@ from dotenv import load_dotenv
 _ENV_BASE_URL = "OPENAI_BASE_URL"
 _ENV_API_KEY = "OPENAI_API_KEY"
 _ENV_MODEL = "OPENAI_MODEL"
+_ENV_CONCURRENCY = "VULSENTINEL_CONCURRENCY"
 _DEFAULT_TEMPLATES_DIR = "nuclei-templates"
 _DEFAULT_REPORTS_DIR = "reports"
+_DEFAULT_CONCURRENCY = 4
+_MAX_CONCURRENCY = 16
 
 
 @dataclass(frozen=True)
@@ -232,6 +235,29 @@ def load_repo_dotenv(repo_root: Path) -> bool:
     return load_dotenv(dotenv_path=repo_root / ".env", override=False)
 
 
+def _parse_concurrency(env: Mapping[str, str]) -> int:
+    raw = env.get(_ENV_CONCURRENCY)
+    if raw is None:
+        return _DEFAULT_CONCURRENCY
+    try:
+        val = int(raw)
+    except ValueError:
+        return _DEFAULT_CONCURRENCY
+    return max(1, min(val, _MAX_CONCURRENCY))
+
+
+def _process_one(
+    entry: "CveEntry",
+    templates_dir: Path,
+    model: "ModelConfig",
+    client: object,
+) -> str:
+    from cve_poc_llm_reports.report_generation import generate_report_markdown_for_entry
+    return generate_report_markdown_for_entry(
+        entry, templates_dir=templates_dir, model=model, client=client,
+    )
+
+
 def main(
     argv: Optional[Sequence[str]] = None,
     *,
@@ -253,6 +279,8 @@ def main(
         print(f"error: {e}", file=sys.stderr)
         return 2
 
+    concurrency = _parse_concurrency(os.environ)
+
     logger.log(
         "start",
         from_year=config.from_year,
@@ -260,13 +288,14 @@ def main(
         model=config.model,
         templates_dir=config.templates_dir,
         reports_dir=config.reports_dir,
+        concurrency=concurrency,
     )
     stats = RunStats()
 
     from cve_poc_llm_reports.atomic_write import atomic_write_text
-    from cve_poc_llm_reports.cves_jsonl import CvesJsonlLineError, iter_cves_jsonl
+    from cve_poc_llm_reports.cves_jsonl import CveEntry, CvesJsonlLineError, iter_cves_jsonl
     from cve_poc_llm_reports.index_jsonl import append_report_index_entry
-    from cve_poc_llm_reports.report_generation import ModelConfig, generate_report_markdown_for_entry
+    from cve_poc_llm_reports.report_generation import ModelConfig
     from cve_poc_llm_reports.report_paths import build_report_path
 
     templates_dir = Path(config.templates_dir)
@@ -280,6 +309,13 @@ def main(
         max_attempts=3,
     )
 
+    from openai import OpenAI as _OpenAI
+    openai_client = _OpenAI(
+        api_key=config.api_key,
+        base_url=config.base_url,
+        timeout=float(model.timeout_seconds),
+    )
+
     def on_jsonl_error(err: CvesJsonlLineError) -> None:
         log_failure(
             logger,
@@ -288,6 +324,9 @@ def main(
             file_path=f"{templates_dir / 'cves.json'}:{err.line_number}",
             reason=f"jsonl_parse_failed: {err.message}; excerpt={err.raw_excerpt}",
         )
+
+    # --- Collect phase (sequential): filter, skip, mkdir ---
+    work_items: list[tuple[CveEntry, Path]] = []
 
     for entry in iter_cves_jsonl(templates_dir=templates_dir, on_error=on_jsonl_error):
         if config.from_year is not None and entry.year < config.from_year:
@@ -328,60 +367,76 @@ def main(
             )
             continue
 
-        try:
-            report = generate_report_markdown_for_entry(entry, templates_dir=templates_dir, model=model)
-        except Exception as e:  # noqa: BLE001
-            log_failure(
-                logger,
-                stats,
-                id=entry.id,
-                file_path=entry.file_path,
-                reason=f"report_generation_failed: {e}",
-            )
-            continue
+        work_items.append((entry, report_path))
 
-        try:
-            atomic_write_text(report_path, report)
-        except Exception as e:  # noqa: BLE001
-            log_failure(
-                logger,
-                stats,
-                id=entry.id,
-                file_path=entry.file_path,
-                reason=f"report_write_failed: {e}",
-            )
-            continue
+    # --- Process phase (concurrent): generate reports via LLM ---
+    if work_items:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        try:
-            append_report_index_entry(
-                index_path=index_path,
-                cve_id=entry.id,
-                report_path=_as_repo_relative(repo_root, report_path),
-            )
-        except Exception as e:  # noqa: BLE001
-            try:
-                report_path.unlink()
-            except OSError:
-                pass
-            log_failure(
-                logger,
-                stats,
-                id=entry.id,
-                file_path=entry.file_path,
-                reason=f"index_write_failed: {e}",
-            )
-            continue
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            future_to_entry = {}
+            for entry, report_path in work_items:
+                fut = pool.submit(
+                    _process_one, entry, templates_dir, model, openai_client,
+                )
+                future_to_entry[fut] = (entry, report_path)
 
-        log_success(
-            logger,
-            stats,
-            id=entry.id,
-            file_path=entry.file_path,
-            report_path=str(report_path),
-        )
+            for fut in as_completed(future_to_entry):
+                entry, report_path = future_to_entry[fut]
+                try:
+                    report_content = fut.result()
+                except Exception as e:  # noqa: BLE001
+                    log_failure(
+                        logger,
+                        stats,
+                        id=entry.id,
+                        file_path=entry.file_path,
+                        reason=f"report_generation_failed: {e}",
+                    )
+                    continue
+
+                try:
+                    atomic_write_text(report_path, report_content)
+                except Exception as e:  # noqa: BLE001
+                    log_failure(
+                        logger,
+                        stats,
+                        id=entry.id,
+                        file_path=entry.file_path,
+                        reason=f"report_write_failed: {e}",
+                    )
+                    continue
+
+                try:
+                    append_report_index_entry(
+                        index_path=index_path,
+                        cve_id=entry.id,
+                        report_path=_as_repo_relative(repo_root, report_path),
+                    )
+                except Exception as e:  # noqa: BLE001
+                    try:
+                        report_path.unlink()
+                    except OSError:
+                        pass
+                    log_failure(
+                        logger,
+                        stats,
+                        id=entry.id,
+                        file_path=entry.file_path,
+                        reason=f"index_write_failed: {e}",
+                    )
+                    continue
+
+                log_success(
+                    logger,
+                    stats,
+                    id=entry.id,
+                    file_path=entry.file_path,
+                    report_path=str(report_path),
+                )
 
     logger.log("summary", **stats.as_fields())
-    return 0
+    return 1 if stats.failed > 0 else 0
 
 
 def _as_repo_relative(repo_root: Path, path: Path) -> str:

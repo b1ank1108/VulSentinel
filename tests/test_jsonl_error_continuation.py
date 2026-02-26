@@ -64,7 +64,7 @@ class TestJsonlErrorContinuation(unittest.TestCase):
                             str(reports_dir),
                         ]
                     )
-                self.assertEqual(rc, 0)
+                self.assertEqual(rc, 1)
 
                 out = stderr.getvalue()
                 self.assertIn("jsonl_parse_failed", out)
