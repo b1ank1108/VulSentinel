@@ -17,10 +17,12 @@ python3 -m pip install -r requirements.txt
 OPENAI_BASE_URL=http(s)://host:port/v1
 OPENAI_API_KEY=...
 OPENAI_MODEL=...
+VULSENTINEL_CONCURRENCY=4
 ```
 
 - `OPENAI_BASE_URL` 必须包含 `/v1`
 - `OPENAI_API_KEY` 不会出现在日志中
+- `VULSENTINEL_CONCURRENCY` 可选，范围 `[1, 16]`，默认 4
 
 ## 用法
 
@@ -36,13 +38,7 @@ python3 cve_poc_llm_reports_cli.py --from-year 2025
 
 ## 并发
 
-默认 4 并发处理 LLM 调用，通过环境变量调整：
-
-```bash
-VULSENTINEL_CONCURRENCY=8
-```
-
-范围 `[1, 16]`，无效值回退为默认值 4。
+默认 4 并发处理 LLM 调用，通过 `.env` 中的 `VULSENTINEL_CONCURRENCY` 调整（范围 `[1, 16]`）。
 
 ## 输出
 
@@ -54,16 +50,27 @@ VULSENTINEL_CONCURRENCY=8
 ---
 cve_id: CVE-2026-21858
 template_path: nuclei-templates/http/cves/2026/CVE-2026-21858.yaml
+affected_product: n8n
 severity: critical
-auth_requirement: none
-oast_required: false
-version_constraints: ">=1.65.0, <1.121.0"
-feature_gates: []
-poc_classification: detect-only
+authentication: none
+external_callback: false
+affected_versions: ">= 1.65.0, < 1.121.0"
+preconditions: []
+poc_classification: rce
 ---
 ```
 
-信号字段从 LLM 输出的 `## Signals` 段落自动提取，`poc_classification` 从 `## PoC / Detection` 段落的 `Classification:` 行提取；提取失败时 frontmatter 仅保留 `cve_id` 和 `template_path`。
+| 字段 | 说明 |
+|------|------|
+| `affected_product` | 受影响的软件产品名 |
+| `severity` | 漏洞严重程度 |
+| `authentication` | 利用是否需要认证（none / required / optional） |
+| `external_callback` | 利用是否需要攻击者接收带外回调（DNS/HTTP） |
+| `affected_versions` | 受影响版本范围（仅模板强制检测的范围） |
+| `preconditions` | 除版本外的利用前置条件 |
+| `poc_classification` | 漏洞能力分类（rce / info-leak / auth-bypass / state-change / dos / detect-only） |
+
+信号字段从 LLM 输出自动提取；提取失败时 frontmatter 仅保留 `cve_id` 和 `template_path`。
 
 索引：`reports/cves.jsonl`，每行 `{"ID": "...", "report_path": "..."}`，仅追加本次新生成的报告。
 

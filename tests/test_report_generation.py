@@ -13,40 +13,50 @@ from cve_poc_llm_reports.report_generation import (
 )
 
 
+_SIGNALS_BLOCK = (
+    "```signals\n"
+    "- affected_product: TestProduct\n"
+    "- severity: high\n"
+    "- authentication: none\n"
+    "- external_callback: false\n"
+    "- affected_versions: unknown\n"
+    "- preconditions: []\n"
+    "```\n"
+)
+
+
+def _make_entry(temp_dir: str, cve_id: str, year: int):
+    templates_dir = Path(temp_dir) / "nuclei-templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    rel = f"http/cves/{year}/{cve_id}.yaml"
+    tpath = templates_dir / rel
+    tpath.parent.mkdir(parents=True, exist_ok=True)
+    tpath.write_text("id: test\ninfo:\n  severity: high\n", encoding="utf-8")
+    entry = CveEntry(id=cve_id, year=year, file_path=rel, template_path=tpath.resolve(), line_number=1)
+    return entry, templates_dir
+
+
 class TestReportGeneration(unittest.TestCase):
     @patch("cve_poc_llm_reports.report_generation.post_chat_completions_text")
     def test_generate_report_markdown_for_entry(self, post_mock: MagicMock) -> None:
         post_mock.return_value = ChatTextResult(
-            content="## Signals\n- severity: high\n- auth_requirement: none\n",
+            content=_SIGNALS_BLOCK + "\n## Vulnerability\nDesc.\n",
             raw_response={"id": "cmpl-1"},
         )
 
-        with TemporaryDirectory() as temp_dir:
-            templates_dir = Path(temp_dir) / "nuclei-templates"
-            templates_dir.mkdir(parents=True)
-            template_path = templates_dir / "http/cves/2025/CVE-2025-0001.yaml"
-            template_path.parent.mkdir(parents=True)
-            template_path.write_text("id: test\ninfo:\n  severity: high\n", encoding="utf-8")
-
-            entry = CveEntry(
-                id="CVE-2025-0001",
-                year=2025,
-                file_path="http/cves/2025/CVE-2025-0001.yaml",
-                template_path=template_path.resolve(),
-                line_number=1,
-            )
+        with TemporaryDirectory() as tmp:
+            entry, tdir = _make_entry(tmp, "CVE-2025-0001", 2025)
             report = generate_report_markdown_for_entry(
-                entry,
-                templates_dir=templates_dir,
+                entry, templates_dir=tdir,
                 model=ModelConfig(base_url="http://example.invalid", api_key="k", model="m"),
             )
             self.assertTrue(report.startswith("---\n"))
             self.assertIn("cve_id: CVE-2025-0001", report)
-            self.assertIn("template_path: nuclei-templates/http/cves/2025/CVE-2025-0001.yaml", report)
             self.assertIn("severity: high", report)
+            self.assertIn("affected_product: TestProduct", report)
             self.assertIn("# CVE-2025-0001", report)
-            self.assertIn("## Signals", report)
-            self.assertNotIn("- template_path:", report)
+            # signals block must be stripped from body
+            self.assertNotIn("```signals", report)
 
     @patch("cve_poc_llm_reports.report_generation.post_chat_completions_text")
     def test_frontmatter_fallback_on_unparseable_signals(self, post_mock: MagicMock) -> None:
@@ -55,128 +65,95 @@ class TestReportGeneration(unittest.TestCase):
             raw_response={"id": "cmpl-2"},
         )
 
-        with TemporaryDirectory() as temp_dir:
-            templates_dir = Path(temp_dir) / "nuclei-templates"
-            templates_dir.mkdir(parents=True)
-            template_path = templates_dir / "http/cves/2025/CVE-2025-0002.yaml"
-            template_path.parent.mkdir(parents=True)
-            template_path.write_text("id: test\n", encoding="utf-8")
-
-            entry = CveEntry(
-                id="CVE-2025-0002",
-                year=2025,
-                file_path="http/cves/2025/CVE-2025-0002.yaml",
-                template_path=template_path.resolve(),
-                line_number=1,
-            )
+        with TemporaryDirectory() as tmp:
+            entry, tdir = _make_entry(tmp, "CVE-2025-0002", 2025)
             report = generate_report_markdown_for_entry(
-                entry,
-                templates_dir=templates_dir,
+                entry, templates_dir=tdir,
                 model=ModelConfig(base_url="http://example.invalid", api_key="k", model="m"),
             )
             self.assertTrue(report.startswith("---\n"))
             self.assertIn("cve_id: CVE-2025-0002", report)
-            self.assertNotIn("severity:", report.split("---")[1].split("---")[0]
-                             if report.count("---") >= 2 else "")
-
+            fm = report.split("---")[1]
+            self.assertNotIn("severity:", fm)
 
     @patch("cve_poc_llm_reports.report_generation.post_chat_completions_text")
     def test_poc_classification_in_frontmatter(self, post_mock: MagicMock) -> None:
-        def _make_entry(temp_dir: str, cve_id: str, year: int, body: str):
-            templates_dir = Path(temp_dir) / "nuclei-templates"
-            templates_dir.mkdir(parents=True, exist_ok=True)
-            rel = f"http/cves/{year}/{cve_id}.yaml"
-            tpath = templates_dir / rel
-            tpath.parent.mkdir(parents=True, exist_ok=True)
-            tpath.write_text("id: test\n", encoding="utf-8")
-            entry = CveEntry(id=cve_id, year=year, file_path=rel, template_path=tpath.resolve(), line_number=1)
-            return entry, templates_dir
-
         with TemporaryDirectory() as tmp:
-            # detect-only
+            # info-leak
             post_mock.return_value = ChatTextResult(
-                content="## PoC / Detection\nClassification: detect-only\nSome details.\n",
+                content=_SIGNALS_BLOCK + "\n## PoC / Detection\nClassification: info-leak\nDetails.\n",
                 raw_response={},
             )
-            entry, tdir = _make_entry(tmp, "CVE-2025-0010", 2025, "")
+            entry, tdir = _make_entry(tmp, "CVE-2025-0010", 2025)
             report = generate_report_markdown_for_entry(
-                entry,
-                templates_dir=tdir,
+                entry, templates_dir=tdir,
                 model=ModelConfig(base_url="http://example.invalid", api_key="k", model="m"),
             )
             fm = report.split("---")[1]
-            self.assertIn("poc_classification: detect-only", fm)
+            self.assertIn("poc_classification: info-leak", fm)
 
         with TemporaryDirectory() as tmp:
-            # exploit
+            # rce
             post_mock.return_value = ChatTextResult(
-                content="## PoC / Detection\nClassification: exploit\nSome details.\n",
+                content=_SIGNALS_BLOCK + "\n## PoC / Detection\nClassification: rce\nDetails.\n",
                 raw_response={},
             )
-            entry, tdir = _make_entry(tmp, "CVE-2025-0011", 2025, "")
+            entry, tdir = _make_entry(tmp, "CVE-2025-0011", 2025)
             report = generate_report_markdown_for_entry(
-                entry,
-                templates_dir=tdir,
+                entry, templates_dir=tdir,
                 model=ModelConfig(base_url="http://example.invalid", api_key="k", model="m"),
             )
             fm = report.split("---")[1]
-            self.assertIn("poc_classification: exploit", fm)
+            self.assertIn("poc_classification: rce", fm)
 
         with TemporaryDirectory() as tmp:
-            # no Classification line -> not in frontmatter
+            # no Classification line
             post_mock.return_value = ChatTextResult(
                 content="## PoC / Detection\nNo classification here.\n",
                 raw_response={},
             )
-            entry, tdir = _make_entry(tmp, "CVE-2025-0012", 2025, "")
+            entry, tdir = _make_entry(tmp, "CVE-2025-0012", 2025)
             report = generate_report_markdown_for_entry(
-                entry,
-                templates_dir=tdir,
+                entry, templates_dir=tdir,
                 model=ModelConfig(base_url="http://example.invalid", api_key="k", model="m"),
             )
             fm = report.split("---")[1]
             self.assertNotIn("poc_classification", fm)
 
     @patch("cve_poc_llm_reports.report_generation.post_chat_completions_text")
-    def test_poc_classification_intrusive(self, post_mock: MagicMock) -> None:
+    def test_poc_classification_state_change(self, post_mock: MagicMock) -> None:
         with TemporaryDirectory() as tmp:
-            templates_dir = Path(tmp) / "nuclei-templates"
-            templates_dir.mkdir(parents=True)
-            tpath = templates_dir / "http/cves/2025/CVE-2025-0013.yaml"
-            tpath.parent.mkdir(parents=True)
-            tpath.write_text("id: test\n", encoding="utf-8")
-            entry = CveEntry(
-                id="CVE-2025-0013",
-                year=2025,
-                file_path="http/cves/2025/CVE-2025-0013.yaml",
-                template_path=tpath.resolve(),
-                line_number=1,
-            )
+            entry, tdir = _make_entry(tmp, "CVE-2025-0013", 2025)
             post_mock.return_value = ChatTextResult(
-                content="## PoC / Detection\nClassification: intrusive\nDestructive action.\n",
+                content="## PoC / Detection\nClassification: state-change\nModifies config.\n",
                 raw_response={},
             )
             report = generate_report_markdown_for_entry(
-                entry,
-                templates_dir=templates_dir,
+                entry, templates_dir=tdir,
                 model=ModelConfig(base_url="http://example.invalid", api_key="k", model="m"),
             )
             fm = report.split("---")[1]
-            self.assertIn("poc_classification: intrusive", fm)
+            self.assertIn("poc_classification: state-change", fm)
 
 
 class TestExtractPocClassification(unittest.TestCase):
     def test_detect_only(self) -> None:
         self.assertEqual(_extract_poc_classification("Classification: detect-only\n"), "detect-only")
 
-    def test_exploit(self) -> None:
-        self.assertEqual(_extract_poc_classification("Classification: exploit"), "exploit")
+    def test_info_leak(self) -> None:
+        self.assertEqual(_extract_poc_classification("Classification: info-leak"), "info-leak")
 
-    def test_active_detect(self) -> None:
-        self.assertEqual(_extract_poc_classification("Classification: active-detect"), "active-detect")
+    def test_auth_bypass(self) -> None:
+        self.assertEqual(_extract_poc_classification("Classification: auth-bypass"), "auth-bypass")
 
-    def test_intrusive(self) -> None:
-        self.assertEqual(_extract_poc_classification("Classification: intrusive"), "intrusive")
+    def test_rce(self) -> None:
+        self.assertEqual(_extract_poc_classification("Classification: rce"), "rce")
+
+    def test_state_change(self) -> None:
+        self.assertEqual(_extract_poc_classification("Classification: state-change"), "state-change")
+
+    def test_dos(self) -> None:
+        self.assertEqual(_extract_poc_classification("Classification: dos"), "dos")
 
     def test_case_insensitive(self) -> None:
         self.assertEqual(_extract_poc_classification("Classification: Detect-Only"), "detect-only")
@@ -188,79 +165,55 @@ class TestExtractPocClassification(unittest.TestCase):
         self.assertIsNone(_extract_poc_classification("Classification: unknown-value"))
 
 
-
-    def test_bare_keys(self) -> None:
-        body = "## Signals\n- severity: high\n- auth_requirement: none\n"
-        result = _extract_signals_from_markdown(body)
-        self.assertEqual(result, {"severity": "high", "auth_requirement": "none"})
-
-    def test_bold_keys(self) -> None:
-        body = "## Signals\n- **severity**: critical\n- **oast_required**: true\n"
-        result = _extract_signals_from_markdown(body)
-        self.assertEqual(result, {"severity": "critical", "oast_required": "true"})
-
-    def test_mixed_keys(self) -> None:
+class TestExtractSignals(unittest.TestCase):
+    def test_signals_block(self) -> None:
         body = (
-            "## Signals\n"
+            "```signals\n"
             "- severity: high\n"
-            "- **auth_requirement**: none\n"
-            "- oast_required: false\n"
+            "- authentication: none\n"
+            "```\n"
+        )
+        result = _extract_signals_from_markdown(body)
+        self.assertEqual(result, {"severity": "high", "authentication": "none"})
+
+    def test_all_six_keys(self) -> None:
+        body = (
+            "```signals\n"
+            "- affected_product: n8n\n"
+            "- severity: critical\n"
+            "- authentication: none\n"
+            "- external_callback: false\n"
+            "- affected_versions: >=1.0.0, <2.0.0\n"
+            "- preconditions: []\n"
+            "```\n"
+            "\n## Vulnerability\n"
         )
         result = _extract_signals_from_markdown(body)
         self.assertEqual(result, {
-            "severity": "high",
-            "auth_requirement": "none",
-            "oast_required": "false",
+            "affected_product": "n8n",
+            "severity": "critical",
+            "authentication": "none",
+            "external_callback": "false",
+            "affected_versions": ">=1.0.0, <2.0.0",
+            "preconditions": "[]",
         })
 
-    def test_missing_section(self) -> None:
+    def test_missing_block(self) -> None:
         body = "## Vulnerability\nSome text.\n## References\n- https://example.com\n"
         result = _extract_signals_from_markdown(body)
         self.assertEqual(result, {})
 
     def test_unknown_keys_filtered(self) -> None:
-        body = "## Signals\n- severity: high\n- random_key: foo\n- auth_requirement: none\n"
+        body = "```signals\n- severity: high\n- random_key: foo\n- authentication: none\n```\n"
         result = _extract_signals_from_markdown(body)
-        self.assertEqual(result, {"severity": "high", "auth_requirement": "none"})
+        self.assertEqual(result, {"severity": "high", "authentication": "none"})
 
-    def test_all_five_keys(self) -> None:
-        body = (
-            "## Signals\n"
-            "- severity: critical\n"
-            "- auth_requirement: none\n"
-            "- oast_required: false\n"
-            "- version_constraints: >=1.0.0, <2.0.0\n"
-            "- feature_gates: []\n"
-            "\n## Vulnerability\n"
-        )
-        result = _extract_signals_from_markdown(body)
-        self.assertEqual(result, {
-            "severity": "critical",
-            "auth_requirement": "none",
-            "oast_required": "false",
-            "version_constraints": ">=1.0.0, <2.0.0",
-            "feature_gates": "[]",
-        })
-
-    def test_signals_at_end_of_body(self) -> None:
-        body = "## Signals\n- severity: low\n"
-        result = _extract_signals_from_markdown(body)
-        self.assertEqual(result, {"severity": "low"})
-
-    def test_bold_section_header(self) -> None:
-        body = "**Signals**\n- severity: critical\n- auth_requirement: none\n\n**Vulnerability**\n"
-        result = _extract_signals_from_markdown(body)
-        self.assertEqual(result, {"severity": "critical", "auth_requirement": "none"})
-
-    def test_bold_hash_section_header(self) -> None:
-        body = "**## Signals**\n- severity: high\n- oast_required: false\n\n**## Vulnerability**\n"
-        result = _extract_signals_from_markdown(body)
-        self.assertEqual(result, {"severity": "high", "oast_required": "false"})
-
-    def test_bold_section_with_trailing_spaces(self) -> None:
-        body = "**Signals**  \n- severity: high\n- auth_requirement: none\n\n**PoC / Detection**\n"
-        result = _extract_signals_from_markdown(body)
-        self.assertEqual(result, {"severity": "high", "auth_requirement": "none"})
+    def test_signals_block_stripped_from_body(self) -> None:
+        from cve_poc_llm_reports.report_generation import _strip_signals_block
+        body = "```signals\n- severity: low\n```\n\n## Vulnerability\nDesc.\n"
+        stripped = _strip_signals_block(body)
+        self.assertNotIn("```signals", stripped)
+        self.assertIn("## Vulnerability", stripped)
 
 
 if __name__ == "__main__":

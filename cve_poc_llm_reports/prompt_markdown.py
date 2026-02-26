@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 _REQUIRED_SIGNAL_KEYS = (
+    "affected_product",
     "severity",
-    "auth_requirement",
-    "oast_required",
-    "version_constraints",
-    "feature_gates",
+    "authentication",
+    "external_callback",
+    "affected_versions",
+    "preconditions",
 )
 
 
@@ -36,34 +37,53 @@ def build_report_markdown_prompt_messages(
         "- Return ONLY Markdown (no JSON).",
         "- Do NOT include a top-level title (the caller will add '# <CVE-ID>').",
         "",
-        "Required sections:",
-        "",
-        "FORMATTING RULE: Use standard Markdown `##` headings for ALL section titles. Do NOT use bold (`**`) for section headings.",
-        "",
-        "## Signals",
+        "Signal keys:",
         f"- Include exactly these keys: {', '.join(_REQUIRED_SIGNAL_KEYS)}",
-        "- Format each signal as a plain '- key: value' line (no bold, no extra formatting).",
+        "- affected_product: the name of the affected software product or component. "
+        "Extract from info.name, stripping any prefix like 'CVE-YYYY-NNNNN -'. "
+        "Examples: 'n8n', 'Mailpit', 'SmarterMail', 'WordPress modular-connector plugin'.",
         "- severity: copy from info.severity",
-        "- auth_requirement: whether the TEMPLATE ITSELF sends auth credentials (Authorization header, cookies, login step). "
-        "Values: none / required / optional. This reflects the template's behavior, NOT the real-world vulnerability's auth requirement.",
-        "- oast_required: true ONLY if the template uses {{interactsh-url}}, oob, or DNS/HTTP callback mechanisms. "
-        "If no such mechanism is present, set to false. Never use 'unknown' for this field.",
-        "- version_constraints: ONLY report ranges that the template ENFORCES via compare_versions() or equivalent DSL in its matchers. "
+        "- authentication: whether the vulnerability requires authentication to exploit. "
+        "Values: none / required / optional. Determine from the template's request patterns: "
+        "does it send credentials (Authorization header, cookies, login step)? If yes, the vuln likely requires auth.",
+        "- external_callback: whether exploiting this vulnerability requires the attacker to receive "
+        "out-of-band callbacks (e.g. DNS/HTTP requests to an attacker-controlled server). "
+        "true if the template uses interactsh-url, OOB, or DNS/HTTP callback mechanisms; false otherwise.",
+        "- affected_versions: version range affected by this vulnerability. "
+        "ONLY report ranges that the template ENFORCES via compare_versions() or equivalent DSL in its matchers. "
         "If the template has no version-checking logic in matchers, write 'unknown' even if info.description mentions version ranges.",
-        "- feature_gates: conditions beyond version that must be true for exploitation. "
+        "- preconditions: conditions beyond version that must be true for exploitation. "
         "Examples: specific features enabled ('Git node enabled'), configurations ('guest ticket creation allowed'), deployment modes ('self-hosted'). "
         "Extract from info.description and template request patterns. Use [] only if truly no preconditions.",
+        "",
+        "Output the signal values at the very start of your response in this exact format (one per line, no section heading):",
+        "```signals",
+        "- affected_product: <value>",
+        "- severity: <value>",
+        "- authentication: <value>",
+        "- external_callback: <value>",
+        "- affected_versions: <value>",
+        "- preconditions: <value>",
+        "```",
+        "",
+        "After the signals block, write the report sections (no ## Signals section):",
+        "",
+        "FORMATTING RULE: Use standard Markdown `##` headings for ALL section titles. Do NOT use bold (`**`) for section headings.",
         "",
         "## Vulnerability",
         "",
         "## PoC / Detection",
-        "Classify the template into exactly ONE of these categories based on what it ACTUALLY DOES (not what the vulnerability could do):",
-        "- detect-only: template only fingerprints/version-checks, sends no payload, creates no server-side state.",
-        "- active-detect: template sends a probe that triggers the vuln condition but does not exfiltrate data or create persistent state (e.g. reflected XSS check).",
-        "- exploit: template actively exploits the vuln: reads unauthorized data (SSRF/LFI), creates sessions (auth bypass), modifies state (password reset), or executes code.",
-        "- intrusive: template has destructive side effects (password changes, data writes, account creation). Check for 'intrusive' in tags.",
-        "Use the tags field as strong hints: 'passive' -> likely detect-only, 'intrusive' -> intrusive, 'auth-bypass' -> likely exploit or intrusive.",
+        "Classify the VULNERABILITY's exploitability into exactly ONE of these categories:",
+        "- info-leak: vulnerability allows reading unauthorized data (SSRF, LFI, path traversal, information disclosure).",
+        "- auth-bypass: vulnerability allows bypassing authentication or escalating privileges.",
+        "- rce: vulnerability allows remote code execution or arbitrary command injection.",
+        "- state-change: vulnerability allows unauthorized modification of data, configuration, or accounts (password reset, data write, account creation).",
+        "- dos: vulnerability allows denial of service.",
+        "- detect-only: vulnerability's impact cannot be determined from the template; template only fingerprints or version-checks.",
+        "Determine the classification from the vulnerability description, CVE metadata, and what the template's request patterns reveal about the underlying flaw "
+        "— NOT from what the template itself does (templates often use harmless probes to verify exploitable conditions).",
         "State the classification clearly at the start of this section: 'Classification: <category>'.",
+        "Then describe what the template actually does to detect/verify the vulnerability.",
         "",
         "## References",
         "Include ONLY URLs listed in the template's info.reference field. Do NOT add, infer, or fabricate any other URLs.",

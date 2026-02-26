@@ -36,7 +36,7 @@ class PromptConfig:
 
 
 _POC_CLASSIFICATION_RE = re.compile(
-    r"Classification:\s*(detect-only|active-detect|exploit|intrusive)",
+    r"Classification:\s*(info-leak|auth-bypass|rce|state-change|dos|detect-only)",
     re.IGNORECASE,
 )
 
@@ -46,24 +46,28 @@ def _extract_poc_classification(body: str) -> str | None:
     return m.group(1).lower() if m else None
 
 
+_SIGNALS_BLOCK_RE = re.compile(
+    r"```signals\s*\n(.*?)```", re.DOTALL,
+)
+
+
 def _extract_signals_from_markdown(body: str) -> dict[str, str]:
-    # Match "## Signals", "**Signals**", "**## Signals**", etc.
-    signals_match = re.search(
-        r"(?:^|\n)\s*\*{0,2}\s*(?:##+\s*)?\s*Signals\s*\*{0,2}\s*\n(.*?)(?=\n(?:##\s|\*{2,}\s*(?:#|Vulnerability|PoC))|\Z)",
-        body,
-        re.DOTALL,
-    )
-    if not signals_match:
+    m = _SIGNALS_BLOCK_RE.search(body)
+    if not m:
         return {}
 
-    section = signals_match.group(1)
+    section = m.group(1)
     found: dict[str, str] = {}
-    for m in _SIGNAL_KEY_RE.finditer(section):
-        key = m.group(1).strip().lower()
-        value = m.group(2).strip()
+    for line_m in _SIGNAL_KEY_RE.finditer(section):
+        key = line_m.group(1).strip().lower()
+        value = line_m.group(2).strip()
         if key in _REQUIRED_SIGNAL_KEYS:
             found[key] = value
     return found
+
+
+def _strip_signals_block(body: str) -> str:
+    return _SIGNALS_BLOCK_RE.sub("", body).strip()
 
 
 def generate_report_markdown_for_entry(
@@ -105,6 +109,8 @@ def generate_report_markdown_for_entry(
         )
 
     poc_classification = _extract_poc_classification(body)
+
+    body = _strip_signals_block(body)
 
     fm_lines = [
         "---",
