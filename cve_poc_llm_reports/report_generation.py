@@ -67,7 +67,11 @@ def _extract_signals_from_markdown(body: str) -> dict[str, str]:
 
 
 def _strip_signals_block(body: str) -> str:
-    return _SIGNALS_BLOCK_RE.sub("", body).strip()
+    body = _SIGNALS_BLOCK_RE.sub("", body).strip()
+    # LLM sometimes appends a stray trailing fence
+    if body.endswith("```"):
+        body = body[:-3].rstrip()
+    return body
 
 
 def generate_report_markdown_for_entry(
