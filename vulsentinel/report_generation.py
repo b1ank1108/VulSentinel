@@ -5,9 +5,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from cve_poc_llm_reports.cves_jsonl import CveEntry
-from cve_poc_llm_reports.openai_text import post_chat_completions_text
-from cve_poc_llm_reports.prompt_markdown import (
+from vulsentinel.cves_jsonl import CveEntry
+from vulsentinel.openai_chat import post_chat_completions_text
+from vulsentinel.prompt_markdown import (
     _REQUIRED_SIGNAL_KEYS,
     build_report_markdown_prompt_messages,
 )
@@ -129,5 +129,31 @@ def generate_report_markdown_for_entry(
     fm_lines.append("---")
     frontmatter = "\n".join(fm_lines) + "\n"
 
-    header = f"# {entry.id}\n\n"
-    return frontmatter + header + body + "\n"
+    return frontmatter + "\n" + body + "\n"
+
+
+def build_report_path(*, reports_dir: Path, file_path: str, year: int, cve_id: str) -> Path:
+    prefix = _extract_prefix(file_path)
+    _validate_rel_prefix(prefix)
+    _validate_cve_id_for_filename(cve_id)
+    return reports_dir / prefix / "cves" / str(year) / f"{cve_id}.md"
+
+
+def _extract_prefix(file_path: str) -> str:
+    parts = file_path.split("/cves/", 1)
+    if len(parts) != 2 or not parts[0]:
+        raise ValueError("file_path must contain '<prefix>/cves/'")
+    return parts[0].strip("/")
+
+
+def _validate_rel_prefix(prefix: str) -> None:
+    path = Path(prefix)
+    if path.is_absolute():
+        raise ValueError("prefix must be a relative path")
+    if any(part in ("..", ".") for part in path.parts):
+        raise ValueError("prefix must not contain '.' or '..'")
+
+
+def _validate_cve_id_for_filename(cve_id: str) -> None:
+    if "/" in cve_id or "\\" in cve_id:
+        raise ValueError("cve_id must not contain path separators")

@@ -35,7 +35,7 @@ def build_report_markdown_prompt_messages(
         "",
         "Output:",
         "- Return ONLY Markdown (no JSON).",
-        "- Do NOT include a top-level title (the caller will add '# <CVE-ID>').",
+        "- Do NOT include a top-level `#` title. Start directly with the `## Vulnerability` section.",
         "",
         "Signal keys:",
         f"- Include exactly these keys: {', '.join(_REQUIRED_SIGNAL_KEYS)}",
@@ -50,8 +50,9 @@ def build_report_markdown_prompt_messages(
         "out-of-band callbacks (e.g. DNS/HTTP requests to an attacker-controlled server). "
         "true if the template uses interactsh-url, OOB, or DNS/HTTP callback mechanisms; false otherwise.",
         "- affected_versions: version range affected by this vulnerability. "
-        "ONLY report ranges that the template ENFORCES via compare_versions() or equivalent DSL in its matchers. "
-        "If the template has no version-checking logic in matchers, write 'unknown' even if info.description mentions version ranges.",
+        "First check matchers for compare_versions() or equivalent DSL; if found, use that range. "
+        "Otherwise, extract from info.description, info.name, or metadata fields. "
+        "Write 'unknown' only if no version information exists anywhere in the template.",
         "- preconditions: conditions beyond version that must be true for exploitation. "
         "Examples: specific features enabled ('Git node enabled'), configurations ('guest ticket creation allowed'), deployment modes ('self-hosted'). "
         "Extract from info.description and template request patterns. Use [] only if truly no preconditions.",

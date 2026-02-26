@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+import threading
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -17,8 +18,8 @@ _ENV_MODEL = "OPENAI_MODEL"
 _ENV_CONCURRENCY = "VULSENTINEL_CONCURRENCY"
 _DEFAULT_TEMPLATES_DIR = "nuclei-templates"
 _DEFAULT_REPORTS_DIR = "reports"
-_DEFAULT_CONCURRENCY = 4
-_MAX_CONCURRENCY = 16
+_DEFAULT_CONCURRENCY = 16
+_MAX_CONCURRENCY = 999
 
 
 @dataclass(frozen=True)
@@ -71,28 +72,6 @@ class RunStats:
             "failed": self.failed,
             "succeeded": self.succeeded,
         }
-
-
-def log_skip(
-    logger: EventLogger,
-    stats: RunStats,
-    *,
-    id: str,
-    file_path: str,
-    reason: str,
-    **extra: object,
-) -> None:
-    stats.processed += 1
-    stats.skipped += 1
-    logger.log(
-        "skip",
-        processed=stats.processed,
-        skipped=stats.skipped,
-        id=id,
-        file_path=file_path,
-        reason=reason,
-        **extra,
-    )
 
 
 def log_failure(logger: EventLogger, stats: RunStats, *, id: str, file_path: str, reason: str) -> None:
@@ -162,6 +141,12 @@ def build_parser(*, prog: str, include_openai_overrides: bool) -> argparse.Argum
         "--reports-dir",
         default=_DEFAULT_REPORTS_DIR,
         help="Output directory root for generated reports (write-only).",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of reports to generate in this run.",
     )
     return parser
 
@@ -252,7 +237,7 @@ def _process_one(
     model: "ModelConfig",
     client: object,
 ) -> str:
-    from cve_poc_llm_reports.report_generation import generate_report_markdown_for_entry
+    from vulsentinel.report_generation import generate_report_markdown_for_entry
     return generate_report_markdown_for_entry(
         entry, templates_dir=templates_dir, model=model, client=client,
     )
@@ -289,14 +274,13 @@ def main(
         templates_dir=config.templates_dir,
         reports_dir=config.reports_dir,
         concurrency=concurrency,
+        limit=getattr(args, "limit", None),
     )
     stats = RunStats()
 
-    from cve_poc_llm_reports.atomic_write import atomic_write_text
-    from cve_poc_llm_reports.cves_jsonl import CveEntry, CvesJsonlLineError, iter_cves_jsonl
-    from cve_poc_llm_reports.index_jsonl import append_report_index_entry
-    from cve_poc_llm_reports.report_generation import ModelConfig
-    from cve_poc_llm_reports.report_paths import build_report_path
+    from vulsentinel.atomic_write import atomic_write_text, append_report_index_entry
+    from vulsentinel.cves_jsonl import CveEntry, CvesJsonlLineError, iter_cves_jsonl
+    from vulsentinel.report_generation import ModelConfig, build_report_path
 
     templates_dir = Path(config.templates_dir)
     reports_dir = Path(config.reports_dir)
@@ -330,29 +314,16 @@ def main(
 
     for entry in iter_cves_jsonl(templates_dir=templates_dir, on_error=on_jsonl_error):
         if config.from_year is not None and entry.year < config.from_year:
-            log_skip(
-                logger,
-                stats,
-                id=entry.id,
-                file_path=entry.file_path,
-                reason="from_year",
-                from_year=config.from_year,
-                year=entry.year,
-            )
+            stats.processed += 1
+            stats.skipped += 1
             continue
 
         report_path = build_report_path(
             reports_dir=reports_dir, file_path=entry.file_path, year=entry.year, cve_id=entry.id
         )
         if report_path.exists():
-            log_skip(
-                logger,
-                stats,
-                id=entry.id,
-                file_path=entry.file_path,
-                reason="report_exists",
-                report_path=str(report_path),
-            )
+            stats.processed += 1
+            stats.skipped += 1
             continue
 
         try:
@@ -369,9 +340,15 @@ def main(
 
         work_items.append((entry, report_path))
 
+    limit = getattr(args, "limit", None)
+    if limit is not None and limit > 0:
+        work_items = work_items[:limit]
+
     # --- Process phase (concurrent): generate reports via LLM ---
     if work_items:
         from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        lock = threading.Lock()
 
         with ThreadPoolExecutor(max_workers=concurrency) as pool:
             future_to_entry = {}
@@ -386,54 +363,56 @@ def main(
                 try:
                     report_content = fut.result()
                 except Exception as e:  # noqa: BLE001
-                    log_failure(
-                        logger,
-                        stats,
-                        id=entry.id,
-                        file_path=entry.file_path,
-                        reason=f"report_generation_failed: {e}",
-                    )
+                    with lock:
+                        log_failure(
+                            logger,
+                            stats,
+                            id=entry.id,
+                            file_path=entry.file_path,
+                            reason=f"report_generation_failed: {e}",
+                        )
                     continue
 
-                try:
-                    atomic_write_text(report_path, report_content)
-                except Exception as e:  # noqa: BLE001
-                    log_failure(
-                        logger,
-                        stats,
-                        id=entry.id,
-                        file_path=entry.file_path,
-                        reason=f"report_write_failed: {e}",
-                    )
-                    continue
-
-                try:
-                    append_report_index_entry(
-                        index_path=index_path,
-                        cve_id=entry.id,
-                        report_path=_as_repo_relative(repo_root, report_path),
-                    )
-                except Exception as e:  # noqa: BLE001
+                with lock:
                     try:
-                        report_path.unlink()
-                    except OSError:
-                        pass
-                    log_failure(
+                        atomic_write_text(report_path, report_content)
+                    except Exception as e:  # noqa: BLE001
+                        log_failure(
+                            logger,
+                            stats,
+                            id=entry.id,
+                            file_path=entry.file_path,
+                            reason=f"report_write_failed: {e}",
+                        )
+                        continue
+
+                    try:
+                        append_report_index_entry(
+                            index_path=index_path,
+                            cve_id=entry.id,
+                            report_path=_as_repo_relative(repo_root, report_path),
+                        )
+                    except Exception as e:  # noqa: BLE001
+                        try:
+                            report_path.unlink()
+                        except OSError:
+                            pass
+                        log_failure(
+                            logger,
+                            stats,
+                            id=entry.id,
+                            file_path=entry.file_path,
+                            reason=f"index_write_failed: {e}",
+                        )
+                        continue
+
+                    log_success(
                         logger,
                         stats,
                         id=entry.id,
                         file_path=entry.file_path,
-                        reason=f"index_write_failed: {e}",
+                        report_path=str(report_path),
                     )
-                    continue
-
-                log_success(
-                    logger,
-                    stats,
-                    id=entry.id,
-                    file_path=entry.file_path,
-                    report_path=str(report_path),
-                )
 
     logger.log("summary", **stats.as_fields())
     return 1 if stats.failed > 0 else 0
