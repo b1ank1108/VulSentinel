@@ -8,11 +8,13 @@ __pycache__/
 *.py[cod]
 .python-version
 
+# tests
+tests/
+
 # generated outputs (tracked for CI auto-commit)
 # reports/
 
-# external checkouts
-nuclei-templates/
+# nuclei-templates is tracked as a git submodule
 
 # local tooling artifacts
 .codex/

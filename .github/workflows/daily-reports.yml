@@ -1,4 +1,4 @@
-name: VulSentinel CI / Daily Reports
+name: VulSentinel CI / Reports
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -32,6 +32,11 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Update nuclei-templates
+        run: git submodule update --remote --depth 1 nuclei-templates
 
       - uses: actions/setup-python@v5
         with:
@@ -39,20 +44,18 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - run: git clone --depth 1 https://github.com/projectdiscovery/nuclei-templates.git nuclei-templates
-
       - name: Generate CVE reports
-        run: python scripts/cve_poc_llm_reports.py --from-year 2025
+        run: python vulsentinel_cli.py --limit 100
         env:
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
 
-      - name: Commit and push reports
+      - name: Commit and push
         run: |
-          git add reports/
+          git add nuclei-templates reports/
           git diff --cached --quiet && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: auto-generate CVE reports [skip ci]"
+          git commit -m "chore: update templates & generate reports [skip ci]"
           git push
