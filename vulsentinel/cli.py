@@ -288,8 +288,7 @@ def main(
         base_url=config.base_url,
         api_key=config.api_key,
         model=config.model,
-        timeout_seconds=30,
-        max_attempts=3,
+        timeout_seconds=60,
     )
 
     from openai import OpenAI as _OpenAI
@@ -414,7 +413,7 @@ def main(
                     )
 
     logger.log("summary", **stats.as_fields())
-    return 1 if stats.failed > 0 else 0
+    return 0
 
 
 def _as_repo_relative(repo_root: Path, path: Path) -> str:

@@ -25,8 +25,7 @@ class ModelConfig:
     base_url: str
     api_key: str
     model: str
-    timeout_seconds: int = 30
-    max_attempts: int = 3
+    timeout_seconds: int = 60
 
 
 @dataclass(frozen=True)
@@ -93,12 +92,8 @@ def generate_report_markdown_for_entry(
         max_summary_lines=prompt.max_summary_lines,
     )
     result = post_chat_completions_text(
-        base_url=model.base_url,
-        api_key=model.api_key,
         model=model.model,
         messages=messages,
-        timeout_seconds=model.timeout_seconds,
-        max_attempts=model.max_attempts,
         client=client,
     )
     body = result.content.strip()
