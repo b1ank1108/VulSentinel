@@ -8,8 +8,8 @@ __pycache__/
 *.py[cod]
 .python-version
 
-# generated outputs
-reports/
+# generated outputs (tracked for CI auto-commit)
+# reports/
 
 # external checkouts
 nuclei-templates/
@@ -20,4 +20,4 @@ nuclei-templates/
 openspec/
 
 # local scratch files
-cve_poc_llm_reports/prompt_utils.py
+.claude/
