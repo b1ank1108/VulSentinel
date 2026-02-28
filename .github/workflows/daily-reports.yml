@@ -31,7 +31,7 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Generate CVE reports
-        run: python vulsentinel_cli.py --limit 100
+        run: python vulsentinel_cli.py --limit 200
         env:
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
