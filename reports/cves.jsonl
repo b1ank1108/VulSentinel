@@ -3899,3 +3899,5 @@
 {"ID": "CVE-2025-54249", "report_path": "reports/http/cves/2025/CVE-2025-54249.md"}
 {"ID": "CVE-2021-3122", "report_path": "reports/network/cves/2021/CVE-2021-3122.md"}
 {"ID": "CVE-2023-21839", "report_path": "reports/javascript/cves/2023/CVE-2023-21839.md"}
+{"ID": "CVE-2021-27877", "report_path": "reports/network/cves/2021/CVE-2021-27877.md"}
+{"ID": "CVE-2024-23897", "report_path": "reports/javascript/cves/2024/CVE-2024-23897.md"}
