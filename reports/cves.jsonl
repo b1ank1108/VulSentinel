@@ -3945,3 +3945,6 @@
 {"ID": "CVE-2026-1405", "report_path": "reports/http/cves/2026/CVE-2026-1405.md"}
 {"ID": "CVE-2025-62512", "report_path": "reports/http/cves/2025/CVE-2025-62512.md"}
 {"ID": "CVE-2025-68043", "report_path": "reports/http/cves/2025/CVE-2025-68043.md"}
+{"ID": "CVE-2025-54793", "report_path": "reports/http/cves/2025/CVE-2025-54793.md"}
+{"ID": "CVE-2026-31816", "report_path": "reports/http/cves/2026/CVE-2026-31816.md"}
+{"ID": "CVE-2026-33868", "report_path": "reports/http/cves/2026/CVE-2026-33868.md"}
