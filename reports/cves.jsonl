@@ -4135,3 +4135,5 @@
 {"ID": "CVE-2026-42647", "report_path": "reports/http/cves/2026/CVE-2026-42647.md"}
 {"ID": "CVE-2025-13773", "report_path": "reports/http/cves/2025/CVE-2025-13773.md"}
 {"ID": "CVE-2026-0257", "report_path": "reports/javascript/cves/2026/CVE-2026-0257.md"}
+{"ID": "CVE-2026-29059", "report_path": "reports/http/cves/2026/CVE-2026-29059.md"}
+{"ID": "CVE-2026-42271", "report_path": "reports/http/cves/2026/CVE-2026-42271.md"}
