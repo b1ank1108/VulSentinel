@@ -1,3 +1,5 @@
+
+
 # VulSentinel
 
 读取 [nuclei-templates](https://github.com/projectdiscovery/nuclei-templates) CVE 模板 → LLM 分析 → 输出结构化 Markdown 报告，供下游漏洞修复决策。
@@ -19,6 +21,12 @@
 
 ```bash
 pip install -r requirements.txt
+```
+
+### 初始化模板库
+
+```bash
+git submodule update --init --recursive
 ```
 
 ### 配置环境变量
